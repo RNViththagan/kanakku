@@ -52,7 +52,7 @@ export const mybank: BankPlugin = {
 ## Try it on your own files
 
 ```
-pnpm --filter @kanakku/core report --data <your data folder>
+kanakku report --data <your data folder>
 ```
 
 The report runs the whole engine and prints accounts, coverage, net worth, cash flow, transfers, conversions, cards, Needs you and tidy-up suggestions. It reads `<data folder>/kanakku/config.yaml`; see `config.example.yaml`.

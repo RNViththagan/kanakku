@@ -1,0 +1,17 @@
+{
+  "name": "@kanakku/server",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "bin": {
+    "kanakku": "./bin/kanakku.mjs"
+  },
+  "scripts": {
+    "check": "tsc -p tsconfig.json"
+  },
+  "dependencies": {
+    "@kanakku/core": "workspace:*",
+    "tsx": "4.23.15",
+    "yaml": "2.9.1"
+  }
+}

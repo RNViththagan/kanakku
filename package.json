@@ -11,7 +11,8 @@
     "check": "tsc -p tsconfig.json && pnpm -r --if-present run check",
     "lint": "biome check .",
     "format": "biome check --write .",
-    "prepare": "simple-git-hooks"
+    "prepare": "simple-git-hooks",
+    "cli:install": "node scripts/install-cli.mjs"
   },
   "simple-git-hooks": {
     "pre-commit": "node scripts/check-private.mjs"

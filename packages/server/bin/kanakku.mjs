@@ -3,4 +3,4 @@ import { register } from 'tsx/esm/api';
 
 register();
 const { main } = await import('../src/cli.ts');
-process.exitCode = main();
+process.exitCode = await main();

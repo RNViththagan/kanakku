@@ -68,6 +68,7 @@ export function overviewStats(ledger: Ledger): OverviewStats {
 export interface AccountRow {
   account: Account;
   asOf: IsoDate;
+  closed: boolean;
   balance?: number;
   homeValue?: number;
   coverage?: AccountCoverage;
@@ -88,9 +89,14 @@ export function accountRow(
   const coverage = ledger.coverage[account.id];
   const covered = coverage?.lastCovered;
   const asOf = covered && covered < ledger.today ? covered : ledger.today;
-  const row: AccountRow = { account, asOf };
-  if (coverage) row.coverage = coverage;
   const balance = balanceOn(ledger, account.id, asOf);
+  const emptied =
+    account.type === 'fixed-deposit' &&
+    balance === 0 &&
+    ledger.depositMoves.some((move) => move.account === account.id);
+  const closed = (account.closed !== undefined && account.closed <= ledger.today) || emptied;
+  const row: AccountRow = { account, asOf, closed };
+  if (coverage) row.coverage = coverage;
   if (balance !== undefined) {
     row.balance = balance;
     const valued = rates.toHome(balance, account.currency, asOf);
@@ -116,6 +122,9 @@ export function accountsByBank(ledger: Ledger): BankGroup[] {
     };
     group.accounts.push(accountRow(ledger, account, rates));
     groups.set(account.bank, group);
+  }
+  for (const group of groups.values()) {
+    group.accounts.sort((a, b) => Number(a.closed) - Number(b.closed));
   }
   return [...groups.values()];
 }
@@ -249,12 +258,22 @@ export interface NeedsGroup {
   items: NeedsItem[];
 }
 
+export function needLabel(type: string): string {
+  return NEED_LABELS[type] ?? type;
+}
+
+export function topNeeds(ledger: Pick<Ledger, 'needs'>, count: number): NeedsItem[] {
+  return [...ledger.needs]
+    .sort((a, b) => URGENCY[a.severity] - URGENCY[b.severity])
+    .slice(0, count);
+}
+
 export function needsByType(ledger: Pick<Ledger, 'needs'>): NeedsGroup[] {
   const groups = new Map<string, NeedsGroup>();
   for (const need of ledger.needs) {
     const group = groups.get(need.type) ?? {
       type: need.type,
-      label: NEED_LABELS[need.type] ?? need.type,
+      label: needLabel(need.type),
       severity: need.severity,
       items: [],
     };

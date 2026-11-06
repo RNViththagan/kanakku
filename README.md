@@ -4,7 +4,7 @@ Your bank statements, as one finance system.
 
 Kanakku (கணக்கு, "accounts" in Tamil) is a personal finance app that runs on your own computer. You download statements from your banks and drop them into folders. Kanakku reads them and shows all your accounts together: what you have, where your money went, and how it moved between your own accounts.
 
-> **Status:** early development. The engine and a text report work. The web app is next.
+> **Status:** early development. The engine, a text report and a read-only web app work. Answering questions, rules and tidy-up from the app come next.
 
 ## What it does
 
@@ -37,10 +37,14 @@ Needs Node 22 and pnpm 10.
 
 ```
 pnpm install
+pnpm build                # builds the web app
 pnpm cli:install          # puts a kanakku command in ~/.local/bin (--bin <dir> for another folder)
 kanakku use ~/Finance     # your data folder, with kanakku/config.yaml and your bank folders
-kanakku report            # accounts, net worth, cash flow, transfers and what needs you
+kanakku                   # starts the app and opens it in your browser
+kanakku report            # the same numbers as text
 ```
+
+The app runs only on your computer, at `http://127.0.0.1:5170`. It updates by itself when statement files change.
 
 Start your config from `config.example.yaml`. `kanakku help` lists every command.
 
@@ -49,9 +53,10 @@ Start your config from `config.example.yaml`. `kanakku help` lists every command
 ```
 pnpm test
 pnpm check && pnpm lint
+pnpm dev                  # the app with live reload, on the data folder you chose with kanakku use
 ```
 
-The engine lives in `packages/core` and the `kanakku` command in `packages/server`. The design is in `docs/specs/`, and `docs/adding-a-bank.md` explains how to add a bank.
+The engine lives in `packages/core`, the `kanakku` command and local server in `packages/server`, and the web app in `packages/web`. The design is in `docs/specs/`, and `docs/adding-a-bank.md` explains how to add a bank.
 
 ## License
 

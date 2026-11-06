@@ -66,7 +66,9 @@ function item(draft: NeedDraft): NeedsItem {
   return need;
 }
 
-function maturityOf(deposit: { start?: IsoDate; months?: number; maturity?: IsoDate } | undefined) {
+export function maturityOf(
+  deposit: { start?: IsoDate; months?: number; maturity?: IsoDate } | undefined,
+) {
   if (!deposit) return undefined;
   if (deposit.maturity) return deposit.maturity;
   if (!deposit.start || !deposit.months) return undefined;

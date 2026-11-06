@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it } from 'vitest';
-import { compact, money, monthLabel, shortDate } from '../src/format';
+import { compact, formatMajor, money, monthLabel, shortDate, toMajor } from '../src/format';
 
 const zone = process.env.TZ;
 
@@ -28,5 +28,18 @@ describe('format', () => {
     process.env.TZ = 'Pacific/Kiritimati';
     expect(shortDate('2026-11-06', 'en-US')).toBe('Nov 6, 2026');
     expect(monthLabel('2026-10', 'en-US')).toBe('Oct 2026');
+  });
+});
+
+describe('toMajor', () => {
+  it('turns minor units into a number for charts', () => {
+    expect(toMajor(28529045, 'LKR')).toBe(285290.45);
+    expect(toMajor(500, 'JPY')).toBe(500);
+  });
+});
+
+describe('formatMajor', () => {
+  it('shows a chart value as money', () => {
+    expect(formatMajor(285290.45, 'LKR', 'en-US')).toBe('285,290.45 LKR');
   });
 });

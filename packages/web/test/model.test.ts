@@ -8,6 +8,7 @@ import {
   overviewStats,
   rangeEndingAt,
   rangeFor,
+  topNeeds,
   transactionRows,
 } from '../src/model';
 
@@ -93,6 +94,41 @@ describe('accountsByBank', () => {
   it('is empty for an empty ledger', () => {
     expect(accountsByBank(empty)).toEqual([]);
   });
+
+  it('marks an account closed in the config once that day has passed', () => {
+    const closed: Ledger = {
+      ...ledger,
+      accounts: ledger.accounts.map((account) =>
+        account.id === 'hnb-lkr' ? { ...account, closed: '2026-02-01' } : account,
+      ),
+    };
+    const hnb = accountsByBank(closed)[2];
+    expect(hnb?.accounts.map((row) => [row.account.id, row.closed])).toEqual([
+      ['hnb-usd', false],
+      ['hnb-lkr', true],
+    ]);
+  });
+
+  it('marks closed fixed deposits and puts them last', () => {
+    const deposit = ledger.accounts.at(-1);
+    const savings = ledger.accounts[1];
+    if (!deposit || !savings) throw new Error('fixture accounts missing');
+    const closed: Ledger = {
+      ...ledger,
+      accounts: [...ledger.accounts, { ...savings, id: 'cb-extra', name: 'ComBank Extra' }],
+      depositMoves: [
+        ...ledger.depositMoves,
+        { account: deposit.id, date: '2026-02-10', amount: -12000000 },
+      ],
+    };
+    const combank = accountsByBank(closed)[1];
+    expect(combank?.accounts.map((row) => [row.account.id, row.closed])).toEqual([
+      ['cb-savings', false],
+      ['cb-card', false],
+      ['cb-extra', false],
+      ['deposit-combank-3099999999', true],
+    ]);
+  });
 });
 
 describe('ranges', () => {
@@ -158,5 +194,15 @@ describe('needsByType', () => {
 
   it('is empty when nothing needs you', () => {
     expect(needsByType(empty)).toEqual([]);
+  });
+});
+
+describe('topNeeds', () => {
+  it('takes the most urgent items first', () => {
+    expect(topNeeds(ledger, 3).map((need) => need.type)).toEqual([
+      'unreadable-file',
+      'card-due',
+      'uncategorised',
+    ]);
   });
 });

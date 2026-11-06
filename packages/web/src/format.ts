@@ -4,9 +4,22 @@ export function money(minor: number, currency: CurrencyCode, locale: string): st
   return `${formatAmount(minor, currency, locale)} ${currency}`;
 }
 
+export function toMajor(minor: number, currency: CurrencyCode): number {
+  return minor / 10 ** minorUnits(currency);
+}
+
+export function formatMajor(value: number, currency: CurrencyCode, locale: string): string {
+  const places = minorUnits(currency);
+  const number = new Intl.NumberFormat(locale, {
+    minimumFractionDigits: places,
+    maximumFractionDigits: places,
+  }).format(value);
+  return `${number} ${currency}`;
+}
+
 export function compact(minor: number, currency: CurrencyCode, locale: string): string {
   return new Intl.NumberFormat(locale, { notation: 'compact', maximumFractionDigits: 2 }).format(
-    minor / 10 ** minorUnits(currency),
+    toMajor(minor, currency),
   );
 }
 

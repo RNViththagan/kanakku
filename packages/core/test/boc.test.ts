@@ -68,6 +68,12 @@ describe('BOC account CSV', () => {
     expect(verifyChecks(format.parse(input('zero.csv', withZero)), 'LKR')).toEqual([]);
   });
 
+  it('marks a file whose quotes were dropped unreadable', () => {
+    const unquoted = text('account.csv').replace(/"([\d,]+\.\d{2})"/g, '$1');
+    const parsed = applyUnreadableShare(format.parse(input('unquoted.csv', unquoted)));
+    expect(parsed.issues.map((issue) => issue.code)).toContain('unreadable');
+  });
+
   it('rejects impossible dates and marks the file unreadable', () => {
     const resaved = applyUnreadableShare(format.parse(input('resaved.csv')));
     expect(resaved.rows).toEqual([]);

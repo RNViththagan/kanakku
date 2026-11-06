@@ -205,6 +205,22 @@ describe('buildLedger on the fixture world', () => {
     expect(withFiles([newer], dismissed).needs.map((need) => need.type)).toContain('uncategorised');
   });
 
+  it('tells you when some rows of a file could not be read', () => {
+    const boc = worldFiles().find((file) => file.name === 'BOC_RECEIPT_overlap.csv');
+    if (!boc) throw new Error('fixture missing');
+    const damaged = { ...boc, text: boc.text.replace('2026-02-03,POS', '2026-02-31,POS') };
+    const files = worldFiles().map((file) => (file.path === boc.path ? damaged : file));
+    const result = buildLedger({
+      files,
+      config: worldConfig(),
+      decisions: [],
+      rates: [],
+      today: WORLD_TODAY,
+    });
+    const need = result.needs.find((item) => item.type === 'bad-rows');
+    expect(need?.refs.file).toBe(boc.path);
+  });
+
   it('is plain data', () => {
     expect(JSON.parse(JSON.stringify(ledger))).toEqual(ledger);
   });

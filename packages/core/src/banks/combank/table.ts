@@ -1,7 +1,8 @@
-import { parseDmy, parseMdyShort } from '../../model/dates';
+import { parseMdyShort } from '../../model/dates';
 import { normalizeAmount } from '../../model/money';
 import { parseCsv } from '../../parse/csv';
 import { signedAmount } from '../amounts';
+import { badRowIssue, monthFirstIssue, readDayMonthDate } from '../dates';
 import type { FileInput, ParsedRow, ParsedStatement } from '../types';
 
 const REQUIRED = ['Transaction Date', 'Description', 'Currency', 'Debit', 'Credit'];
@@ -67,24 +68,22 @@ export function parseTable(file: FileInput, withBalance: boolean): ParsedStateme
     return statement;
   }
   const { columns, index: headerIndex } = layout.header;
+  const width = layout.rows[headerIndex]?.length ?? 0;
+  let monthFirst = false;
   for (let index = headerIndex + 1; index < layout.rows.length; index += 1) {
     const cells = layout.rows[index] ?? [];
     if (cells.every((cell) => cell.trim() === '')) break;
     if (cells.some((cell) => cell.trim().startsWith(GENERATED))) break;
     const cell = (name: string) => cells[columns.get(name) ?? -1] ?? '';
     const line = index + 1;
-    const date = parseDmy(cell('Transaction Date'));
+    const read = readDayMonthDate(cell('Transaction Date'));
+    monthFirst ||= read.monthFirst;
     const amount = signedAmount(cell('Credit'), cell('Debit'));
-    if (!date || amount === undefined) {
-      statement.issues.push({
-        level: 'warning',
-        code: 'bad-row',
-        message: `Line ${line} could not be read`,
-        file: file.path,
-        line,
-      });
+    if (cells.length !== width || !read.date || amount === undefined) {
+      statement.issues.push(badRowIssue(file.path, line));
       continue;
     }
+    const date = read.date;
     const row: ParsedRow = {
       line,
       date,
@@ -99,6 +98,10 @@ export function parseTable(file: FileInput, withBalance: boolean): ParsedStateme
     statement.rows.push(row);
     const currency = cell('Currency').trim();
     if (currency && !statement.account.currency) statement.account.currency = currency;
+  }
+  if (monthFirst) {
+    statement.rows = [];
+    statement.issues.push(monthFirstIssue(file.path));
   }
   return statement;
 }

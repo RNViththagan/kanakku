@@ -3,6 +3,7 @@ import { describe, expect, it } from 'vitest';
 import { combank } from '../src/banks/combank';
 import type { FileInput } from '../src/banks/types';
 import { matchWording } from '../src/banks/wording';
+import { applyUnreadableShare } from '../src/ledger/checks';
 
 const ACCOUNT_FILE = 'transaction_history_0087654321_20260401.csv';
 const CARD_FILE = 'transactions_history_current_period.csv';
@@ -56,7 +57,7 @@ describe('ComBank account CSV', () => {
   });
 
   it('keeps reading after a bad row', () => {
-    const broken = text(ACCOUNT_FILE).replace(',10/03/2026,', ',10/13/2026,');
+    const broken = text(ACCOUNT_FILE).replace(',10/03/2026,', ',32/03/2026,');
     const parsed = accountFormat.parse(input(ACCOUNT_FILE, broken));
     expect(parsed.rows).toHaveLength(5);
     expect(parsed.rows.at(-1)?.date).toBe('2026-03-03');
@@ -79,6 +80,29 @@ describe('ComBank card CSV', () => {
     expect(parsed.rows[0]).toMatchObject({ amount: '-3000.00', reference: '000000000001' });
     expect(parsed.rows[4]).toMatchObject({ amount: '500.50', reference: '000000000005' });
     expect(parsed.rows[0]?.balance).toBeUndefined();
+  });
+});
+
+describe('ComBank files re-saved by a spreadsheet', () => {
+  it('marks a card file with dropped quotes unreadable', () => {
+    const unquoted = text(CARD_FILE).replace(/"([\d,]+\.\d{2})"/g, '$1');
+    const parsed = applyUnreadableShare(cardFormat.parse(input(CARD_FILE, unquoted)));
+    expect(parsed.rows).toEqual([]);
+    expect(parsed.issues.map((issue) => issue.code)).toContain('unreadable');
+  });
+
+  it('marks a card file with month-first dates unreadable', () => {
+    const swapped = text(CARD_FILE).replace(/,(\d{2})\/(\d{2})\/(\d{4}),/g, ',$2/$1/$3,');
+    const parsed = applyUnreadableShare(cardFormat.parse(input(CARD_FILE, swapped)));
+    expect(parsed.rows).toEqual([]);
+    expect(parsed.issues.map((issue) => issue.code)).toContain('date-order-suspect');
+  });
+
+  it('rejects dates without two-digit days and months', () => {
+    const short = text(CARD_FILE).replace(',08/01/2026,', ',8/1/2026,');
+    const parsed = cardFormat.parse(input(CARD_FILE, short));
+    expect(parsed.rows).toHaveLength(4);
+    expect(parsed.issues.map((issue) => issue.code)).toEqual(['bad-row']);
   });
 });
 

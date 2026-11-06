@@ -10,14 +10,18 @@ coverage/
 
 # Real statements and personal data never belong in this repo.
 *.csv
+*.tsv
 *.xls
 *.xlsx
 *.pdf
-!**/fixtures/**/*.csv
+!packages/*/test/fixtures/**/*.csv
 /dev-data/
 config.yaml
+config.yml
+decisions.yaml
+decisions.yml
 CLAUDE.local.md
 .private-strings
 !demo/**/*.csv
 !demo/**/config.yaml
-!**/fixtures/**/config.yaml
+!packages/*/test/fixtures/**/config.yaml

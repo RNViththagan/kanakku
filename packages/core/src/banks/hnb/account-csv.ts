@@ -1,7 +1,8 @@
-import { parseDmy, startOfMonth } from '../../model/dates';
+import { startOfMonth } from '../../model/dates';
 import { normalizeAmount } from '../../model/money';
 import { parseCsv } from '../../parse/csv';
 import { signedAmount } from '../amounts';
+import { badRowIssue, monthFirstIssue, readDayMonthDate } from '../dates';
 import type { FileInput, ParsedRow, ParsedStatement, StatementFormat } from '../types';
 
 const HEADER = ['Date', 'Ref.No', 'Particulars', 'Debits', 'Credits', 'Balance'];
@@ -39,6 +40,7 @@ function parse(file: FileInput): ParsedStatement {
     });
     return statement;
   }
+  let monthFirst = false;
   for (let index = headerIndex + 1; index < table.length; index += 1) {
     const cells = table[index] ?? [];
     if (cells.every((cell) => cell.trim() === '')) continue;
@@ -51,7 +53,9 @@ function parse(file: FileInput): ParsedStatement {
       credit = '',
       balanceCell = '',
     ] = cells;
-    const date = parseDmy(dateCell);
+    const read = readDayMonthDate(dateCell);
+    monthFirst ||= read.monthFirst;
+    const date = read.date;
     const description = particulars.trim();
     const balance = normalizeAmount(balanceCell);
     if (description === CLOSING && date && balance !== undefined) {
@@ -59,14 +63,8 @@ function parse(file: FileInput): ParsedStatement {
       break;
     }
     const amount = signedAmount(credit, debit);
-    if (!date || amount === undefined) {
-      statement.issues.push({
-        level: 'warning',
-        code: 'bad-row',
-        message: `Line ${line} could not be read`,
-        file: file.path,
-        line,
-      });
+    if (cells.length !== HEADER.length || !date || amount === undefined) {
+      statement.issues.push(badRowIssue(file.path, line));
       continue;
     }
     const row: ParsedRow = { line, date, description, amount, raw: cells };
@@ -84,6 +82,12 @@ function parse(file: FileInput): ParsedStatement {
         line,
       });
     }
+  }
+  if (monthFirst) {
+    statement.rows = [];
+    delete statement.closing;
+    statement.issues.push(monthFirstIssue(file.path));
+    return statement;
   }
   const closing = statement.closing;
   if (closing) {

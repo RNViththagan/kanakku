@@ -2,7 +2,8 @@ import { execFileSync } from 'node:child_process';
 import { existsSync, readFileSync } from 'node:fs';
 import { pathToFileURL } from 'node:url';
 
-const STATEMENT_EXTENSIONS = ['.csv', '.xls', '.xlsx', '.pdf', '.ofx', '.qif'];
+const STATEMENT_EXTENSIONS = ['.csv', '.tsv', '.xls', '.xlsx', '.pdf', '.ofx', '.qif'];
+const PERSONAL_FILES = ['config.yaml', 'config.yml', 'decisions.yaml', 'decisions.yml'];
 const PRIVATE_LIST = '.private-strings';
 
 /** @param {string} text */
@@ -15,7 +16,16 @@ export function parsePrivateStrings(text) {
 
 /** @param {string} path */
 function isSampleDataPath(path) {
-  return path.startsWith('demo/') || path.split('/').includes('fixtures');
+  return path.startsWith('demo/') || /^packages\/[^/]+\/test\/fixtures\//.test(path);
+}
+
+/**
+ * @param {string} line
+ * @param {string} secret
+ */
+function mentions(line, secret) {
+  if (line.includes(secret)) return true;
+  return /^\d{6,}$/.test(secret) && line.replace(/[\s-]/g, '').includes(secret);
 }
 
 /**
@@ -31,12 +41,12 @@ export function findViolations(files, privateStrings) {
     if (STATEMENT_EXTENSIONS.some((ext) => lower.endsWith(ext)) && !isSampleDataPath(path)) {
       violations.push({ path, reason: 'statement file outside fixtures' });
     }
-    if (lower.split('/').at(-1) === 'config.yaml' && !isSampleDataPath(path)) {
+    if (PERSONAL_FILES.includes(lower.split('/').at(-1) ?? '') && !isSampleDataPath(path)) {
       violations.push({ path, reason: 'personal config file' });
     }
     if (privateStrings.length === 0) continue;
     content.split(/\r?\n/).forEach((line, index) => {
-      if (privateStrings.some((secret) => line.includes(secret))) {
+      if (privateStrings.some((secret) => mentions(line, secret))) {
         violations.push({ path, line: index + 1, reason: 'contains a private string' });
       }
     });

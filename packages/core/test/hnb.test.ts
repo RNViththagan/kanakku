@@ -69,6 +69,24 @@ describe('HNB account CSV', () => {
   });
 });
 
+describe('HNB files re-saved by a spreadsheet', () => {
+  it('marks a file with month-first dates unreadable', () => {
+    const swapped = text('lkr-2026-03.csv').replace(/^(\d{2})\/(\d{2})\/(\d{4})/gm, '$2/$1/$3');
+    const parsed = format.parse(input('swapped.csv', swapped));
+    expect(parsed.issues.map((issue) => issue.code)).toContain('date-order-suspect');
+  });
+
+  it('treats a row with extra cells as a bad row', () => {
+    const shifted = text('lkr-2026-03.csv').replace(
+      'Finacle Alert Charges,25,,1200.50',
+      'Finacle Alert Charges,2,5,,1200.50',
+    );
+    const parsed = format.parse(input('shifted.csv', shifted));
+    expect(parsed.rows).toHaveLength(3);
+    expect(parsed.issues.map((issue) => issue.code)).toEqual(['bad-row']);
+  });
+});
+
 describe('HNB wording', () => {
   const match = (description: string, direction: 'in' | 'out') =>
     matchWording(description, direction, 'savings', hnb.wording);

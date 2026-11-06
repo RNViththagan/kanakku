@@ -18,6 +18,7 @@ const SEVERITY: Record<string, NeedsItem['severity']> = {
   'card-due': 'normal',
   'unreadable-file': 'normal',
   'totals-mismatch': 'normal',
+  'bad-rows': 'normal',
   'possible-transfer': 'normal',
   'ambiguous-transfer': 'normal',
   counterparty: 'normal',
@@ -39,6 +40,7 @@ const ACTIONS: Record<string, string[]> = {
   'card-due': ['show-cycle'],
   'unreadable-file': ['show-file', 'ignore'],
   'totals-mismatch': ['show-file'],
+  'bad-rows': ['show-file'],
   'possible-transfer': ['pick-account', 'not-transfer'],
   'ambiguous-transfer': ['choose'],
   counterparty: ['mine', 'not-mine'],
@@ -94,6 +96,16 @@ export function buildNeeds(
         key: file.hash,
         message: `${fileName} could not be read as a bank statement.`,
         refs: { file: file.path },
+      });
+    }
+    const badRows = file.issues.filter((issue) => issue.code === 'bad-row').length;
+    if (file.status === 'ok' && badRows > 0) {
+      all.push({
+        type: 'bad-rows',
+        key: `${file.hash}|${badRows}`,
+        message: `${badRows} ${badRows === 1 ? 'row' : 'rows'} of ${fileName} could not be read, so ${badRows === 1 ? 'it is' : 'they are'} not counted.`,
+        refs: { file: file.path },
+        data: { count: badRows },
       });
     }
     if (file.issues.some((issue) => issue.code === 'totals-mismatch')) {

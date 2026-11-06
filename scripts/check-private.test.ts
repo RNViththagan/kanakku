@@ -43,6 +43,32 @@ describe('findViolations', () => {
   });
 });
 
+describe('findViolations, review hardening', () => {
+  it('only trusts fixtures inside package tests', () => {
+    expect(findViolations([{ path: 'fixtures/real.csv', content: '' }], [])).toHaveLength(1);
+    expect(
+      findViolations([{ path: 'packages/core/test/fixtures/boc/a.csv', content: '' }], []),
+    ).toEqual([]);
+  });
+
+  it('blocks saved answers, yml configs and tsv statements outside samples', () => {
+    const blocked = ['kanakku/decisions.yaml', 'config.yml', 'statement.tsv'];
+    for (const path of blocked) {
+      expect(findViolations([{ path, content: '' }], [])).toHaveLength(1);
+    }
+    expect(findViolations([{ path: 'demo/data/kanakku/decisions.yaml', content: '' }], [])).toEqual(
+      [],
+    );
+  });
+
+  it('finds an account number written with spaces or dashes', () => {
+    const files = [{ path: 'notes.md', content: 'paid from 0012 3456-78 today' }];
+    expect(findViolations(files, ['0012345678'])).toEqual([
+      { path: 'notes.md', line: 1, reason: 'contains a private string' },
+    ]);
+  });
+});
+
 describe('parsePrivateStrings', () => {
   it('ignores blank and comment lines in the private list', () => {
     expect(parsePrivateStrings('# my numbers\n\n0099\n  \r\nPERERA\n')).toEqual(['0099', 'PERERA']);

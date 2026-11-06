@@ -2,6 +2,7 @@ import { parseDmyDash, parseYmd } from '../../model/dates';
 import { normalizeAmount } from '../../model/money';
 import { parseCsv, stripBom } from '../../parse/csv';
 import { signedAmount } from '../amounts';
+import { badRowIssue } from '../dates';
 import type { FileInput, ParsedRow, ParsedStatement, StatementFormat } from '../types';
 
 const TITLE = 'BANK OF CEYLON - ACCOUNT STATEMENT';
@@ -69,28 +70,22 @@ function readRow(
 function parse(file: FileInput): ParsedStatement {
   const statement: ParsedStatement = { account: {}, rows: [], issues: [] };
   let columns: Map<string, number> | undefined;
+  let width = 0;
   parseCsv(file.text).forEach((cells, index) => {
     const line = index + 1;
     if (!columns) {
       if (cells[0]?.trim() === 'Date' && cells[1]?.trim() === 'Description') {
         columns = new Map(cells.map((name, position) => [name.trim(), position]));
+        width = cells.length;
       } else {
         readHeader(cells, statement);
       }
       return;
     }
     if (cells.every((value) => value.trim() === '')) return;
-    const row = readRow(cells, columns, line);
+    const row = cells.length === width ? readRow(cells, columns, line) : undefined;
     if (row) statement.rows.push(row);
-    else {
-      statement.issues.push({
-        level: 'warning',
-        code: 'bad-row',
-        message: `Line ${line} could not be read`,
-        file: file.path,
-        line,
-      });
-    }
+    else statement.issues.push(badRowIssue(file.path, line));
   });
   if (statement.checks && Object.keys(statement.checks).length === 0) delete statement.checks;
   if (!columns) {

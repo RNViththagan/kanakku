@@ -25,6 +25,7 @@ export function verifyChecks(parsed: ParsedStatement, currency: CurrencyCode): I
   let debits = 0;
   let creditCount = 0;
   let debitCount = 0;
+  let zeroCount = 0;
   for (const row of parsed.rows) {
     const minor = decimalToMinor(row.amount, currency);
     if (minor > 0) {
@@ -33,6 +34,8 @@ export function verifyChecks(parsed: ParsedStatement, currency: CurrencyCode): I
     } else if (minor < 0) {
       debits -= minor;
       debitCount += 1;
+    } else {
+      zeroCount += 1;
     }
   }
   const problems: string[] = [];
@@ -43,11 +46,21 @@ export function verifyChecks(parsed: ParsedStatement, currency: CurrencyCode): I
   };
   compare('credits', checks.credits, credits);
   compare('debits', checks.debits, debits);
-  if (checks.creditCount !== undefined && checks.creditCount !== creditCount) {
+  const countFits = (stated: number | undefined, counted: number) =>
+    stated === undefined || (stated >= counted && stated <= counted + zeroCount);
+  if (!countFits(checks.creditCount, creditCount)) {
     problems.push(`${checks.creditCount} credits stated, ${creditCount} in rows`);
   }
-  if (checks.debitCount !== undefined && checks.debitCount !== debitCount) {
+  if (!countFits(checks.debitCount, debitCount)) {
     problems.push(`${checks.debitCount} debits stated, ${debitCount} in rows`);
+  }
+  const stated = (checks.creditCount ?? 0) + (checks.debitCount ?? 0);
+  if (
+    checks.creditCount !== undefined &&
+    checks.debitCount !== undefined &&
+    stated !== creditCount + debitCount + zeroCount
+  ) {
+    problems.push(`${stated} rows stated, ${creditCount + debitCount + zeroCount} in the file`);
   }
   if (problems.length === 0) return [];
   return [

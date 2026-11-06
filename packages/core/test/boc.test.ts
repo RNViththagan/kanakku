@@ -58,6 +58,16 @@ describe('BOC account CSV', () => {
     expect(issues.map((issue) => issue.code)).toEqual(['totals-mismatch']);
   });
 
+  it('accepts zero-amount rows counted on either side', () => {
+    const withZero = text('account.csv')
+      .replace(
+        '2026-02-01,SMS ALERT MONTHLY',
+        '2026-02-10,CARD FEE WAIVED,Debit,,0.00,"106,606.78",000000000,761\n2026-02-01,SMS ALERT MONTHLY',
+      )
+      .replace('9 - item(s)', '10 - item(s)');
+    expect(verifyChecks(format.parse(input('zero.csv', withZero)), 'LKR')).toEqual([]);
+  });
+
   it('rejects impossible dates and marks the file unreadable', () => {
     const resaved = applyUnreadableShare(format.parse(input('resaved.csv')));
     expect(resaved.rows).toEqual([]);

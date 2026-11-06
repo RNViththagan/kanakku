@@ -40,6 +40,7 @@ export interface TransferRow {
   id: string;
   date: IsoDate;
   pair: string;
+  pairLabel: string;
   rule?: Transfer['rule'];
   sides: TransferSide[];
   from?: string;
@@ -53,6 +54,21 @@ export interface TransferRow {
   fee: number;
   status: TransferStatus;
   deposit: boolean;
+}
+
+function nodeName(accounts: Map<string, Account>, key: string): string {
+  if (!key) return UNKNOWN_ACCOUNT;
+  if (key.startsWith('deposits:')) {
+    const bank = key.slice('deposits:'.length);
+    return `${findBank(bank)?.shortName ?? bank} fixed deposits`;
+  }
+  return accounts.get(key)?.name ?? key;
+}
+
+export function pairLabel(ledger: Ledger, key: string): string {
+  const accounts = new Map(ledger.accounts.map((account) => [account.id, account]));
+  const [from = '', to = ''] = key.split('|');
+  return `${nodeName(accounts, from)} to ${nodeName(accounts, to)}`;
 }
 
 function pairNode(accounts: Map<string, Account>, id: string): [string, string] {
@@ -91,6 +107,7 @@ export function transferRows(ledger: Ledger, range: DateRange): TransferRow[] {
       id: transfer.id,
       date: transfer.date,
       pair: `${node(transfer.from)}|${node(transfer.to)}`,
+      pairLabel: `${nodeName(accounts, node(transfer.from))} to ${nodeName(accounts, node(transfer.to))}`,
       rule: transfer.rule,
       sides: [...side(transfer.out), ...side(transfer.in)],
       from: transfer.from,
@@ -116,6 +133,9 @@ export function transferRows(ledger: Ledger, range: DateRange): TransferRow[] {
       id: transaction.id,
       date: transaction.date,
       pair: out ? `${node(transaction.account)}|` : `|${node(transaction.account)}`,
+      pairLabel: out
+        ? `${nodeName(accounts, node(transaction.account))} to ${UNKNOWN_ACCOUNT}`
+        : `${UNKNOWN_ACCOUNT} to ${nodeName(accounts, node(transaction.account))}`,
       sides: side(transaction.id),
       fromName: out ? name(transaction.account) : UNKNOWN_ACCOUNT,
       toName: out ? UNKNOWN_ACCOUNT : name(transaction.account),
@@ -136,8 +156,8 @@ export function searchTransfers(rows: TransferRow[], search: string): TransferRo
   const text = search.trim().toLowerCase();
   if (!text) return rows;
   return rows.filter((row) =>
-    [row.fromName, row.toName, ...row.sides.map((side) => side.description)].some((value) =>
-      value.toLowerCase().includes(text),
+    [row.fromName, row.toName, row.pairLabel, ...row.sides.map((side) => side.description)].some(
+      (value) => value.toLowerCase().includes(text),
     ),
   );
 }
@@ -375,6 +395,7 @@ export interface DepositRow {
 function depositInterest(ledger: Ledger): Map<string, number> {
   const deposits = ledger.accounts.filter((account) => account.type === 'fixed-deposit');
   const ids = new Set(deposits.map((account) => account.id));
+  const currencies = new Map(deposits.map((account) => [account.id, account.currency]));
   const byNumber = new Map<string, string>();
   for (const account of deposits) {
     if (account.number) byNumber.set(numberKey(account.number), account.id);
@@ -393,7 +414,7 @@ function depositInterest(ledger: Ledger): Map<string, number> {
   for (const row of ledger.transactions) {
     const deposit =
       linked.get(row.id) ?? (row.deposit ? byNumber.get(numberKey(row.deposit)) : undefined);
-    if (!deposit) continue;
+    if (!deposit || row.currency !== currencies.get(deposit)) continue;
     const earned = row.parts
       .filter((part) => part.kind === 'income')
       .reduce((sum, part) => sum + part.amount, 0);
@@ -434,11 +455,11 @@ export function depositRows(ledger: Ledger): DepositRow[] {
         const closed = out.at(-1)?.date ?? account.closed;
         if (closed) row.closed = closed;
         if (out.length > 0) row.returned = -out.reduce((sum, move) => sum + move.amount, 0);
-        if (start && closed) {
-          row.held = diffDays(start, closed);
-          if (row.held > 0 && principal) {
-            row.yearlyRate = (row.interest / principal) * (365 / row.held) * 100;
-          }
+        const held = start && closed ? diffDays(start, closed) : -1;
+        if (held >= 0) row.held = held;
+        const paidOut = row.returned !== undefined || row.interest > 0;
+        if (held > 0 && principal && paidOut) {
+          row.yearlyRate = (row.interest / principal) * (365 / held) * 100;
         }
       }
       return row;

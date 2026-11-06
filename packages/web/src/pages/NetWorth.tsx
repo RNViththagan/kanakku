@@ -203,11 +203,17 @@ export function NetWorth({ ledger, range, rangeLabel }: PageProps) {
                       <TableCell>{row.closed ? shortDate(row.closed, locale) : ''}</TableCell>
                       <TableCell align="right">{row.held ?? ''}</TableCell>
                       <TableCell align="right">
-                        <Amount
-                          minor={row.interest}
-                          currency={row.account.currency}
-                          locale={locale}
-                        />
+                        {row.returned === undefined && row.interest === 0 ? (
+                          <Typography variant="caption" color="text.secondary">
+                            No payout line
+                          </Typography>
+                        ) : (
+                          <Amount
+                            minor={row.interest}
+                            currency={row.account.currency}
+                            locale={locale}
+                          />
+                        )}
                       </TableCell>
                       <TableCell align="right">
                         {row.yearlyRate === undefined ? '' : `${row.yearlyRate.toFixed(2)}%`}

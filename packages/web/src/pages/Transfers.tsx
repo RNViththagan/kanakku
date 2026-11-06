@@ -20,6 +20,7 @@ import { Fragment, useMemo, useState } from 'react';
 import { money, shortDate } from '../format';
 import { hrefFor } from '../routes';
 import {
+  pairLabel,
   searchTransfers,
   type TransferRow,
   type TransferStatus,
@@ -131,7 +132,6 @@ export function Transfers({ ledger, range, rangeLabel, route }: PageProps) {
     !pairKey && transfersOnTab(all, 'needs').length > 0 ? 'needs' : 'all',
   );
   const shown = transfersOnTab(rows, tab);
-  const pair = pairs.find((item) => `${item.from}|${item.to}` === pairKey);
   const toggle = (id: string) =>
     setOpen((current) => {
       const next = new Set(current);
@@ -220,7 +220,7 @@ export function Transfers({ ledger, range, rangeLabel, route }: PageProps) {
         {pairKey ? (
           <Chip
             sx={{ mb: 2 }}
-            label={pair ? `${pair.fromName} to ${pair.toName}` : 'One pair of accounts'}
+            label={pairLabel(ledger, pairKey)}
             onDelete={() => go(hrefFor({ page: 'transfers' }))}
           />
         ) : null}

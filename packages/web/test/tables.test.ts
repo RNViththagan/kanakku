@@ -10,6 +10,7 @@ import {
   depositRows,
   fileRows,
   filterTransactions,
+  pairLabel,
   searchTransfers,
   transferPairs,
   transferRows,
@@ -95,11 +96,25 @@ describe('transferRows', () => {
 });
 
 describe('searchTransfers', () => {
+  it('finds deposit transfers by the name the pairs table uses', () => {
+    const rows = transferRows(ledger, range);
+    expect(searchTransfers(rows, 'fixed deposits').map((row) => row.date)).toEqual(['2026-02-01']);
+  });
+
   it('finds transfers by account name or either side of the bank text', () => {
     const rows = transferRows(ledger, range);
     expect(searchTransfers(rows, 'aml').map((row) => row.date)).toEqual(['2026-01-21']);
     expect(searchTransfers(rows, 'hnb usd')).toHaveLength(1);
     expect(searchTransfers(rows, '  ')).toHaveLength(4);
+  });
+});
+
+describe('pairLabel', () => {
+  it('names both ends of a pair, deposits per bank and unknown ends too', () => {
+    expect(pairLabel(ledger, 'cb-savings|deposits:combank')).toBe(
+      'ComBank Savings to ComBank fixed deposits',
+    );
+    expect(pairLabel(ledger, 'boc-main|')).toBe('BOC Main to Unknown');
   });
 });
 
@@ -338,6 +353,47 @@ describe('depositRows', () => {
       interest: 46027,
     });
     expect(row?.yearlyRate).toBeCloseTo(10, 1);
+  });
+
+  it('leaves the yearly rate blank when no payout was seen', () => {
+    const deposit = ledger.accounts.at(-1);
+    if (!deposit) throw new Error('fixture deposit missing');
+    const closed: Ledger = {
+      ...ledger,
+      today: '2026-03-01',
+      accounts: [...ledger.accounts.slice(0, -1), { ...deposit, closed: '2026-02-20' }],
+    };
+    const row = depositRows(closed)[0];
+    expect(row?.status).toBe('withdrawn');
+    expect(row?.returned).toBeUndefined();
+    expect(row?.yearlyRate).toBeUndefined();
+  });
+
+  it('never counts days held below zero', () => {
+    const deposit = ledger.accounts.at(-1);
+    if (!deposit) throw new Error('fixture deposit missing');
+    const closed: Ledger = {
+      ...ledger,
+      accounts: [...ledger.accounts.slice(0, -1), { ...deposit, closed: '2026-01-15' }],
+    };
+    expect(depositRows(closed)[0]?.held).toBeUndefined();
+  });
+
+  it('ignores interest paid in another currency', () => {
+    const sample = ledger.transactions.find((row) => row.account === 'hnb-usd');
+    if (!sample) throw new Error('fixture USD row missing');
+    const credit = {
+      ...sample,
+      id: 'usd-credit',
+      date: '2026-02-15',
+      amount: 100,
+      kind: 'income' as const,
+      category: 'Interest',
+      deposit: '3099999999',
+      parts: [{ kind: 'income' as const, category: 'Interest', amount: 100 }],
+    };
+    const mixed: Ledger = { ...ledger, transactions: [...ledger.transactions, credit] };
+    expect(depositRows(mixed)[0]?.interest).toBe(0);
   });
 
   it('works out maturity and days left from the term', () => {

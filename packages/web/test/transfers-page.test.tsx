@@ -64,6 +64,11 @@ describe('Transfers', () => {
     expect(page.textContent).toContain('All (1)');
   });
 
+  it('still names the accounts when the chosen pair has nothing in this range', () => {
+    const page = show({ pair: 'boc-main|hnb-usd' });
+    expect(page.textContent).toContain('BOC Main to HNB USD');
+  });
+
   it('opens a transfer to show both sides and why they were paired', () => {
     const page = show({ pair: 'boc-main|cb-savings' });
     act(() => page.querySelector<HTMLButtonElement>('button[aria-label="Show details"]')?.click());

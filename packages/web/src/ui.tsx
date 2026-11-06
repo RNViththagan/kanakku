@@ -10,7 +10,7 @@ import {
   useColorScheme,
 } from '@wso2/oxygen-ui';
 import { AreaChart, BarChart, YAxis } from '@wso2/oxygen-ui-charts-react';
-import type { ReactNode } from 'react';
+import { type ReactNode, useRef } from 'react';
 import { formatMajor, money, shortDate } from './format';
 import { coverageBar } from './tables';
 
@@ -166,6 +166,11 @@ function moneyTooltip(currency: CurrencyCode, locale: string) {
   };
 }
 
+function tooltipShown(chart: HTMLElement): boolean {
+  const tooltip = chart.querySelector<HTMLElement>('.recharts-tooltip-wrapper');
+  return tooltip !== null && getComputedStyle(tooltip).visibility === 'visible';
+}
+
 export function MoneyArea({
   data,
   series,
@@ -183,12 +188,17 @@ export function MoneyArea({
   colors?: string[];
   onSelect?: (index: number) => void;
 }) {
+  const armed = useRef(false);
   return (
     <Box
       sx={onSelect ? { '& .recharts-surface': { cursor: 'pointer' } } : undefined}
+      onPointerDown={(event) => {
+        armed.current = tooltipShown(event.currentTarget);
+      }}
       onClick={
         onSelect
           ? (event) => {
+              if (!armed.current) return;
               const shown = event.currentTarget.querySelector('.recharts-tooltip-label');
               const index = data.findIndex((point) => point.label === shown?.textContent);
               if (index >= 0) onSelect(index);

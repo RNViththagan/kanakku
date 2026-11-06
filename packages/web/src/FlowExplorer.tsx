@@ -169,8 +169,10 @@ export function FlowExplorer({
 
   const level = explore(item.kind === 'category' ? { flow: item.key, by } : { flow: item.key });
   const group = query.group ? groups.find((entry) => entry.key === query.group) : undefined;
-  const total = group ? group.value : entries.reduce((sum, entry) => sum + entry.value, 0);
-  const count = group ? group.count : entries.length;
+  const total = query.group
+    ? (group?.value ?? 0)
+    : entries.reduce((sum, entry) => sum + entry.value, 0);
+  const count = query.group ? (group?.count ?? 0) : entries.length;
 
   let body: ReactNode;
   if (query.group && item.kind !== 'other') {
@@ -263,7 +265,12 @@ export function FlowExplorer({
               variant="body2"
               href={hrefFor({
                 page: 'transactions',
-                query: { category: item.category, from: range.from, to: range.to },
+                query: {
+                  category: item.category,
+                  ...(item.origin ? { origin: item.origin } : {}),
+                  from: range.from,
+                  to: range.to,
+                },
               })}
             >
               Open in Transactions

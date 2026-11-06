@@ -85,6 +85,19 @@ describe('FlowExplorer', () => {
     expect(links(page)).toContainEqual(['Fees', '#/cash-flow?flow=spending%3AFees&by=payee']);
   });
 
+  it('opens the same side of the category in Transactions', () => {
+    const page = show({ flow: 'spending:Fees' });
+    const open = links(page).find(([label]) => label === 'Open in Transactions');
+    expect(open?.[1]).toContain('origin=spending');
+  });
+
+  it('shows nothing, not the whole flow, for a group that is gone', () => {
+    const page = show({ flow: 'spending:Fees', by: 'payee', group: 'NOT THERE' });
+    expect(page.textContent).toContain('Nothing to show');
+    expect(page.textContent).toContain('0 transactions');
+    expect(page.textContent).not.toContain('5 transactions');
+  });
+
   it('says so when the flow is not in this range', () => {
     expect(show({ flow: 'nonsense' }).textContent).toContain('Nothing to show');
   });

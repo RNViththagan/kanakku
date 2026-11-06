@@ -160,7 +160,9 @@ const MIN_WIDTH = 320;
 const letters = new Intl.Segmenter(undefined, { granularity: 'grapheme' });
 
 function letterWidth(letter: string): number {
+  if (/^[MW@]$/.test(letter)) return 12;
   if (/^[A-Z]$/.test(letter)) return 9;
+  if (/^[mw]$/.test(letter)) return 10;
   return /^[ -~]$/.test(letter) ? 7 : 11;
 }
 

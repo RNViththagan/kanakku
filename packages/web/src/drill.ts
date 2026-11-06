@@ -34,15 +34,18 @@ export function payeeOf({
   description,
   counterparty,
 }: Pick<Transaction, 'description' | 'counterparty'>): string {
-  const source = counterparty ?? description.split(' / ')[0] ?? '';
-  const words = source
+  if (counterparty?.trim()) return counterparty.trim().replace(/\s+/g, ' ').toUpperCase();
+  const words = (description.split(' / ')[0] ?? '')
     .replace(/[:/|]+/g, ' ')
     .split(/\s+/)
-    .map((word) => word.replace(/\d+/g, '').replace(/^[^\p{L}]+|[^\p{L}.]+$/gu, ''))
-    .filter(
-      (word) => /\p{L}/u.test(word) && !/^x+$/i.test(word) && !MONTHS.has(word.toLowerCase()),
-    );
-  return words.length > 0 ? words.join(' ').toUpperCase() : 'No description';
+    .filter((word) => !/^[\d\-.,x*]+$/i.test(word))
+    .map((word) =>
+      word.replace(/\d{5,}/g, '').replace(/^[^\p{L}\p{M}\d]+|[^\p{L}\p{M}\d.]+$/gu, ''),
+    )
+    .filter((word) => /\p{L}/u.test(word));
+  const named = words.filter((word) => !MONTHS.has(word.toLowerCase()));
+  const kept = named.length > 0 ? named : words;
+  return kept.length > 0 ? kept.join(' ').toUpperCase() : 'No description';
 }
 
 export function findItem(flow: MoneyFlow, key: string): FlowItem | undefined {

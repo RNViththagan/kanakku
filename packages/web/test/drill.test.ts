@@ -17,7 +17,7 @@ function item(key: string): FlowItem {
 
 describe('payeeOf', () => {
   it('prefers the counterparty the bank wording found', () => {
-    expect(payeeOf({ description: 'MB:own-AML1', counterparty: 'own-AML1' })).toBe('OWN-AML');
+    expect(payeeOf({ description: 'MB:own-AML1', counterparty: 'own-AML1' })).toBe('OWN-AML1');
   });
 
   it('drops references, masked account numbers and dates', () => {
@@ -37,6 +37,19 @@ describe('payeeOf', () => {
     expect(payeeOf({ description: 'APRIL RENT' })).toBe('RENT');
     expect(payeeOf({ description: 'Rent Sept 2026' })).toBe('RENT');
     expect(payeeOf({ description: 'RENT AUGUST / 0001 / -' })).toBe('RENT');
+  });
+
+  it('keeps the marks that complete a letter', () => {
+    expect(payeeOf({ description: 'இலங்கை வங்கி வாடகை' })).toBe('இலங்கை வங்கி வாடகை');
+  });
+
+  it('keeps short numbers that are part of a name', () => {
+    expect(payeeOf({ description: '7-ELEVEN COLOMBO 03' })).toBe('7-ELEVEN COLOMBO');
+    expect(payeeOf({ description: 'SHOP AML1' })).toBe('SHOP AML1');
+  });
+
+  it('keeps a month name when it is all there is', () => {
+    expect(payeeOf({ description: 'JAN' })).toBe('JAN');
   });
 
   it('says so when nothing readable is left', () => {

@@ -235,6 +235,13 @@ describe('flowLayout', () => {
     const shown = (name: string) =>
       narrow.nodes.find((node) => node.item.label === name)?.label.text ?? '';
     expect(shown(caps).length).toBeLessThan(shown(lower).length);
+    const wide = flowLayout(
+      moneyFlow([month({ Salary: 3000 }, { WWWWWWWWWWWW: 1000, HHHHHHHHHHHH: 1000 })]),
+      320,
+    );
+    const label = (name: string) =>
+      wide.nodes.find((node) => node.item.label === name)?.label.text ?? '';
+    expect(label('WWWWWWWWWWWW').length).toBeLessThan(label('HHHHHHHHHHHH').length);
     const letters = (text: string) =>
       [...new Intl.Segmenter(undefined, { granularity: 'grapheme' }).segment(text)].map(
         (part) => part.segment,

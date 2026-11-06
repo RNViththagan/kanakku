@@ -306,6 +306,7 @@ export interface TransactionFilter {
   account?: string;
   kind?: string;
   category?: string;
+  origin?: string;
   from?: IsoDate;
   to?: IsoDate;
 }
@@ -320,8 +321,12 @@ export function filterTransactions(
       (!filter.account || row.accountId === filter.account) &&
       (!filter.kind || row.kind === filter.kind) &&
       (!filter.category ||
-        row.category === filter.category ||
-        row.parts.some((part) => part.category === filter.category)) &&
+        (filter.origin
+          ? row.parts.some(
+              (part) => part.kind === filter.origin && part.category === filter.category,
+            )
+          : row.category === filter.category ||
+            row.parts.some((part) => part.category === filter.category))) &&
       (!filter.from || row.date >= filter.from) &&
       (!filter.to || row.date <= filter.to) &&
       (!search ||

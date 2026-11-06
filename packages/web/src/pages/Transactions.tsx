@@ -82,12 +82,13 @@ export function Transactions({ ledger, route, range, rangeLabel }: PageProps) {
   const [account, setAccount] = useState(query.account ?? '');
   const [kind, setKind] = useState(query.kind ?? '');
   const [category, setCategory] = useState(query.category ?? '');
+  const [origin, setOrigin] = useState(query.origin ?? '');
   const linked = linkRange(route.query, range);
   const { from, to } = linked;
   const categories = useMemo(() => categoryOptions(all), [all]);
   const rows = useMemo(
-    () => filterTransactions(all, { search, account, kind, category, from, to }),
-    [all, search, account, kind, category, from, to],
+    () => filterTransactions(all, { search, account, kind, category, origin, from, to }),
+    [all, search, account, kind, category, origin, from, to],
   );
   const period =
     linked === range ? rangeLabel : `${shortDate(from, locale)} to ${shortDate(to, locale)}`;
@@ -141,7 +142,10 @@ export function Transactions({ ledger, route, range, rangeLabel }: PageProps) {
             size="small"
             label="Category"
             value={category}
-            onChange={(event) => setCategory(event.target.value)}
+            onChange={(event) => {
+              setCategory(event.target.value);
+              setOrigin('');
+            }}
             sx={{ minWidth: 200 }}
           >
             <MenuItem value="">All categories</MenuItem>

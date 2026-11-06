@@ -228,6 +228,17 @@ describe('transaction categories', () => {
     expect(total).toBe(11000);
   });
 
+  it('can hold to the income or spending side of a category', () => {
+    const spent = filterTransactions(rows, { category: 'Fees', origin: 'spending' });
+    expect(
+      spent
+        .flatMap((row) => row.parts)
+        .filter((part) => part.category === 'Fees')
+        .reduce((sum, part) => sum - part.amount, 0),
+    ).toBe(11000);
+    expect(filterTransactions(rows, { category: 'Fees', origin: 'income' })).toEqual([]);
+  });
+
   it('searches the categories carried inside a transaction', () => {
     expect(filterTransactions(rows, { search: 'fees', kind: 'transfer' })).toHaveLength(2);
   });

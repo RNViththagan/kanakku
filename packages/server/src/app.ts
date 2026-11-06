@@ -2,9 +2,10 @@ import { timingSafeEqual } from 'node:crypto';
 import { readFileSync, statSync } from 'node:fs';
 import { createServer, type IncomingMessage, type Server, type ServerResponse } from 'node:http';
 import type { AddressInfo } from 'node:net';
-import { extname, join, resolve, sep } from 'node:path';
+import { extname, isAbsolute, join, relative, resolve, sep } from 'node:path';
 import {
   buildLedger,
+  type Config,
   type ConfigError,
   type IsoDate,
   type Ledger,
@@ -12,6 +13,7 @@ import {
   type TidyProposal,
 } from '@kanakku/core';
 import { loadDataFolder } from './load';
+import { type FolderWatch, watchFolders } from './watch';
 
 export interface Status {
   dataFolder: string;
@@ -35,12 +37,14 @@ export interface AppOptions {
   webRoot: string;
   token: string;
   today: () => IsoDate;
+  watch?: boolean;
 }
 
 export interface App {
   server: Server;
   rebuild(): void;
   state(): AppState;
+  close(): Promise<void>;
 }
 
 const TOKEN_PATTERN = /^[A-Za-z0-9_-]{16,256}$/;
@@ -119,10 +123,32 @@ export function createApp(options: AppOptions): App {
     },
   };
   let ledgerJson: string | undefined;
+  let watching: { key: string; watch: FolderWatch } | undefined;
+  let closed = false;
+
+  function foldersToWatch(config?: Config): string[] {
+    const outside = (config?.folders ?? [])
+      .map((folder) => (isAbsolute(folder.path) ? folder.path : join(dataFolder, folder.path)))
+      .filter((path) => {
+        const fromData = relative(dataFolder, path);
+        return isAbsolute(fromData) || fromData === '..' || fromData.startsWith(`..${sep}`);
+      });
+    return [dataFolder, ...outside];
+  }
+
+  function rewatch(config?: Config): void {
+    if (closed) return;
+    const folders = foldersToWatch(config);
+    const key = folders.join('\0');
+    if (watching?.key === key) return;
+    watching?.watch.close();
+    watching = { key, watch: watchFolders(folders, rebuild) };
+  }
 
   function rebuild(): void {
     try {
       const contents = loadDataFolder(dataFolder);
+      if (options.watch) rewatch(contents.config);
       const status: Status = {
         dataFolder,
         configPath: contents.configPath,
@@ -150,6 +176,7 @@ export function createApp(options: AppOptions): App {
         current = { ...current, status: { ...status, stale: current.ledger !== undefined } };
       }
     } catch (problem) {
+      if (options.watch && !watching) rewatch();
       current = {
         ...current,
         status: {
@@ -243,6 +270,16 @@ export function createApp(options: AppOptions): App {
     }
   });
 
+  async function close(): Promise<void> {
+    closed = true;
+    watching?.watch.close();
+    watching = undefined;
+    for (const stream of streams) stream.end();
+    streams.clear();
+    server.closeAllConnections();
+    await new Promise<void>((done) => server.close(() => done()));
+  }
+
   rebuild();
-  return { server, rebuild, state: () => current };
+  return { server, rebuild, state: () => current, close };
 }

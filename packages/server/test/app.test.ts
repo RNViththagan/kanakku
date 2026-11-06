@@ -1,147 +1,20 @@
-import {
-  cpSync,
-  mkdirSync,
-  mkdtempSync,
-  readFileSync,
-  rmSync,
-  symlinkSync,
-  writeFileSync,
-} from 'node:fs';
-import { type IncomingHttpHeaders, request } from 'node:http';
-import type { AddressInfo } from 'node:net';
-import { tmpdir } from 'node:os';
+import { readFileSync, symlinkSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
-import { fileURLToPath } from 'node:url';
 import { afterEach, describe, expect, it } from 'vitest';
 import { createApp } from '../src/app';
+import {
+  cleanup,
+  copyWorld,
+  makeWebRoot,
+  openStream,
+  send,
+  serve,
+  TOKEN,
+  tempDir,
+  world,
+} from './helpers/http';
 
-const world = fileURLToPath(new URL('../../core/test/fixtures/ledger', import.meta.url));
-const TOKEN = 'a'.repeat(64);
-const cleanups: Array<() => void | Promise<void>> = [];
-
-afterEach(async () => {
-  for (const cleanup of cleanups.splice(0).reverse()) await cleanup();
-});
-
-function tempDir(): string {
-  const dir = mkdtempSync(join(tmpdir(), 'kanakku-app-'));
-  cleanups.push(() => rmSync(dir, { recursive: true, force: true }));
-  return dir;
-}
-
-function makeWebRoot(): string {
-  const base = tempDir();
-  const root = join(base, 'web');
-  mkdirSync(root);
-  writeFileSync(
-    join(root, 'index.html'),
-    '<!doctype html><html><head><title>Kanakku</title></head><body><div id="root"></div></body></html>',
-  );
-  writeFileSync(join(root, 'app.js'), 'console.log("kanakku");');
-  writeFileSync(join(base, 'package.json'), '{"secret":"outside the web root"}');
-  return root;
-}
-
-async function serve(dataFolder = world) {
-  const app = createApp({
-    dataFolder,
-    webRoot: makeWebRoot(),
-    token: TOKEN,
-    today: () => '2026-02-20',
-  });
-  await new Promise<void>((done) => app.server.listen(0, '127.0.0.1', done));
-  cleanups.push(
-    () =>
-      new Promise<void>((done) => {
-        app.server.closeAllConnections();
-        app.server.close(() => done());
-      }),
-  );
-  return { app, port: (app.server.address() as AddressInfo).port };
-}
-
-interface Reply {
-  status: number;
-  headers: IncomingHttpHeaders;
-  body: string;
-}
-
-function send(
-  port: number,
-  path: string,
-  options: {
-    method?: string;
-    headers?: Record<string, string>;
-    token?: boolean;
-    setHost?: boolean;
-  } = {},
-): Promise<Reply> {
-  return new Promise((done, fail) => {
-    const req = request(
-      {
-        host: '127.0.0.1',
-        port,
-        path,
-        method: options.method ?? 'GET',
-        setHost: options.setHost ?? true,
-        headers: {
-          ...(options.token === false ? {} : { 'x-kanakku-token': TOKEN }),
-          ...options.headers,
-        },
-      },
-      (res) => {
-        let body = '';
-        res.setEncoding('utf8');
-        res.on('data', (chunk) => {
-          body += chunk;
-        });
-        res.on('end', () => done({ status: res.statusCode ?? 0, headers: res.headers, body }));
-      },
-    );
-    req.on('error', fail);
-    req.end();
-  });
-}
-
-interface Stream {
-  status: number;
-  headers: IncomingHttpHeaders;
-  waitFor(text: string): Promise<void>;
-}
-
-function openStream(port: number, path: string): Promise<Stream> {
-  return new Promise((done, fail) => {
-    const req = request({ host: '127.0.0.1', port, path }, (res) => {
-      let received = '';
-      const waiting: Array<() => void> = [];
-      res.setEncoding('utf8');
-      res.on('data', (chunk) => {
-        received += chunk;
-        for (const check of waiting.splice(0)) check();
-      });
-      done({
-        status: res.statusCode ?? 0,
-        headers: res.headers,
-        waitFor: (text) =>
-          new Promise((found, missing) => {
-            const timer = setTimeout(() => missing(new Error(`no "${text}" in the stream`)), 2000);
-            const check = () => {
-              if (received.includes(text)) {
-                clearTimeout(timer);
-                found();
-              } else waiting.push(check);
-            };
-            check();
-          }),
-      });
-    });
-    req.on('error', fail);
-    cleanups.push(() => {
-      req.destroy();
-    });
-    req.end();
-  });
-}
+afterEach(cleanup);
 
 describe('local app', () => {
   it('rejects a foreign Host header', async () => {
@@ -210,7 +83,7 @@ describe('local app', () => {
   });
 
   it('explains a broken data folder', async () => {
-    const { port } = await serve(tempDir());
+    const { port } = await serve({ dataFolder: tempDir() });
     const ledger = await send(port, '/api/ledger');
     expect(ledger.status).toBe(503);
     expect(JSON.parse(ledger.body).configErrors[0].message).toContain('kanakku/config.yaml');
@@ -220,9 +93,8 @@ describe('local app', () => {
   });
 
   it('keeps the last good ledger when the config breaks', async () => {
-    const folder = tempDir();
-    cpSync(world, folder, { recursive: true });
-    const { app, port } = await serve(folder);
+    const folder = copyWorld();
+    const { app, port } = await serve({ dataFolder: folder });
     const configPath = join(folder, 'kanakku', 'config.yaml');
     const good = readFileSync(configPath, 'utf8');
     writeFileSync(configPath, 'version: 1\naccounts: [');
@@ -241,9 +113,8 @@ describe('local app', () => {
   });
 
   it('keeps the last good ledger when a rebuild fails', async () => {
-    const folder = tempDir();
-    cpSync(world, folder, { recursive: true });
-    const { app, port } = await serve(folder);
+    const folder = copyWorld();
+    const { app, port } = await serve({ dataFolder: folder });
     symlinkSync(join(folder, 'gone.csv'), join(folder, 'boc', 'gone.csv'));
     expect(() => app.rebuild()).not.toThrow();
     expect((await send(port, '/api/ledger')).status).toBe(200);

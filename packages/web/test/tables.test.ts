@@ -10,6 +10,7 @@ import {
   depositRows,
   fileRows,
   filterTransactions,
+  searchTransfers,
   transferPairs,
   transferRows,
   transfersOnTab,
@@ -31,6 +32,22 @@ describe('transferRows', () => {
     ]);
     expect(rows[2]).toMatchObject({ currency: 'USD', amountIn: 15000000, currencyIn: 'LKR' });
     expect(transferRows(ledger, { from: '2026-01-15', to: '2026-01-31' })).toHaveLength(2);
+  });
+
+  it('keeps both sides, the reason for the match and the pair it belongs to', () => {
+    const rows = transferRows(ledger, range);
+    const fee = rows.find((row) => row.date === '2026-01-10');
+    expect(fee).toMatchObject({ rule: 'fee', pair: 'boc-main|cb-savings' });
+    expect(fee?.sides.map((side) => [side.accountId, side.description])).toEqual([
+      ['boc-main', 'CEFT-OWN TRANSFER'],
+      ['cb-savings', 'own / O0000000001 / EF 20260112 101500 CEFLKU0001'],
+    ]);
+    const deposit = rows.find((row) => row.deposit);
+    expect(deposit?.pair).toBe('cb-savings|deposits:combank');
+    expect(deposit?.sides).toHaveLength(1);
+    expect(transferPairs(ledger, range).map((pair) => `${pair.from}|${pair.to}`)).toContain(
+      deposit?.pair,
+    );
   });
 
   it('sorts rows into tabs, with unmatched rows on one side', () => {
@@ -74,6 +91,15 @@ describe('transferRows', () => {
         amount: 1250,
       },
     ]);
+  });
+});
+
+describe('searchTransfers', () => {
+  it('finds transfers by account name or either side of the bank text', () => {
+    const rows = transferRows(ledger, range);
+    expect(searchTransfers(rows, 'aml').map((row) => row.date)).toEqual(['2026-01-21']);
+    expect(searchTransfers(rows, 'hnb usd')).toHaveLength(1);
+    expect(searchTransfers(rows, '  ')).toHaveLength(4);
   });
 });
 

@@ -26,9 +26,22 @@ export const UNKNOWN_ACCOUNT = 'Unknown';
 export type TransferStatus = Transfer['status'] | 'waiting' | 'possible' | 'ambiguous';
 export type TransferTab = 'needs' | 'waiting' | 'all' | 'deposits';
 
+export interface TransferSide {
+  id: string;
+  accountId: string;
+  accountName: string;
+  date: IsoDate;
+  description: string;
+  amount: number;
+  currency: CurrencyCode;
+}
+
 export interface TransferRow {
   id: string;
   date: IsoDate;
+  pair: string;
+  rule?: Transfer['rule'];
+  sides: TransferSide[];
   from?: string;
   fromName: string;
   to?: string;
@@ -42,9 +55,33 @@ export interface TransferRow {
   deposit: boolean;
 }
 
+function pairNode(accounts: Map<string, Account>, id: string): [string, string] {
+  const account = accounts.get(id);
+  if (account?.type !== 'fixed-deposit') return [id, account?.name ?? id];
+  const bank = findBank(account.bank)?.shortName ?? account.bank;
+  return [`deposits:${account.bank}`, `${bank} fixed deposits`];
+}
+
 export function transferRows(ledger: Ledger, range: DateRange): TransferRow[] {
   const accounts = new Map(ledger.accounts.map((account) => [account.id, account]));
   const name = (id: string) => accounts.get(id)?.name ?? id;
+  const node = (id: string) => pairNode(accounts, id)[0];
+  const transactions = new Map(ledger.transactions.map((row) => [row.id, row]));
+  const side = (id: string | undefined): TransferSide[] => {
+    const row = id ? transactions.get(id) : undefined;
+    if (!row) return [];
+    return [
+      {
+        id: row.id,
+        accountId: row.account,
+        accountName: name(row.account),
+        date: row.date,
+        description: row.description,
+        amount: row.amount,
+        currency: row.currency,
+      },
+    ];
+  };
   const isDeposit = (id: string) => accounts.get(id)?.type === 'fixed-deposit';
   const inRange = (date: IsoDate) => date >= range.from && date <= range.to;
   const rows: TransferRow[] = [];
@@ -53,6 +90,9 @@ export function transferRows(ledger: Ledger, range: DateRange): TransferRow[] {
     const row: TransferRow = {
       id: transfer.id,
       date: transfer.date,
+      pair: `${node(transfer.from)}|${node(transfer.to)}`,
+      rule: transfer.rule,
+      sides: [...side(transfer.out), ...side(transfer.in)],
       from: transfer.from,
       fromName: name(transfer.from),
       to: transfer.to,
@@ -75,6 +115,8 @@ export function transferRows(ledger: Ledger, range: DateRange): TransferRow[] {
     const row: TransferRow = {
       id: transaction.id,
       date: transaction.date,
+      pair: out ? `${node(transaction.account)}|` : `|${node(transaction.account)}`,
+      sides: side(transaction.id),
       fromName: out ? name(transaction.account) : UNKNOWN_ACCOUNT,
       toName: out ? UNKNOWN_ACCOUNT : name(transaction.account),
       amount: Math.abs(transaction.amount),
@@ -88,6 +130,16 @@ export function transferRows(ledger: Ledger, range: DateRange): TransferRow[] {
     rows.push(row);
   }
   return rows.sort((a, b) => (a.date < b.date ? 1 : a.date > b.date ? -1 : 0));
+}
+
+export function searchTransfers(rows: TransferRow[], search: string): TransferRow[] {
+  const text = search.trim().toLowerCase();
+  if (!text) return rows;
+  return rows.filter((row) =>
+    [row.fromName, row.toName, ...row.sides.map((side) => side.description)].some((value) =>
+      value.toLowerCase().includes(text),
+    ),
+  );
 }
 
 export function transfersOnTab(rows: TransferRow[], tab: TransferTab): TransferRow[] {
@@ -114,12 +166,7 @@ export interface TransferPair {
 
 export function transferPairs(ledger: Ledger, range: DateRange): TransferPair[] {
   const accounts = new Map(ledger.accounts.map((account) => [account.id, account]));
-  const node = (id: string): [string, string] => {
-    const account = accounts.get(id);
-    if (account?.type !== 'fixed-deposit') return [id, account?.name ?? id];
-    const bank = findBank(account.bank)?.shortName ?? account.bank;
-    return [`deposits:${account.bank}`, `${bank} fixed deposits`];
-  };
+  const node = (id: string) => pairNode(accounts, id);
   const pairs = new Map<string, TransferPair>();
   for (const cell of transferMatrix(ledger, range)) {
     const [from, fromName] = node(cell.from);

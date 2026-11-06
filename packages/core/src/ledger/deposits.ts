@@ -4,6 +4,7 @@ import type { Decision } from '../decisions/load';
 import { hashText } from '../model/hash';
 import { decimalToMinor, minorToDecimal } from '../model/money';
 import type { IsoDate } from '../model/types';
+import { maskFits } from './assign';
 import type { Part, Transaction, Transfer } from './types';
 
 export interface NeedDraft {
@@ -32,8 +33,31 @@ function numberKey(number: string): string {
   return number.replace(/[\s-]/g, '').replace(/^0+/, '');
 }
 
+function namesOwnAccount(row: Transaction, accounts: Account[]): boolean {
+  const deposit = row.deposit;
+  if (!deposit) return false;
+  const bank = accounts.find((account) => account.id === row.account)?.bank;
+  return accounts.some(
+    (account) =>
+      account.type !== 'fixed-deposit' &&
+      account.bank === bank &&
+      account.number !== undefined &&
+      (numberKey(account.number) === numberKey(deposit) || maskFits(account.number, deposit)),
+  );
+}
+
+function asTransferHint(row: Transaction): Transaction {
+  const tags = row.tags.filter((tag) => !(EVENT_TAGS as readonly string[]).includes(tag));
+  const hinted: Transaction = {
+    ...row,
+    tags: tags.includes('transfer-hint') ? tags : [...tags, 'transfer-hint'],
+  };
+  delete hinted.deposit;
+  return hinted;
+}
+
 export function trackDeposits(
-  txns: Transaction[],
+  input: Transaction[],
   ctx: { accounts: Account[]; decisions: Decision[] },
 ): {
   txns: Transaction[];
@@ -43,6 +67,9 @@ export function trackDeposits(
   needs: NeedDraft[];
   moves: DepositMove[];
 } {
+  const txns = input.map((row) =>
+    row.decidedBy === undefined && namesOwnAccount(row, ctx.accounts) ? asTransferHint(row) : row,
+  );
   const owners = new Map(ctx.accounts.map((account) => [account.id, account]));
   const configured = ctx.accounts.filter((account) => account.type === 'fixed-deposit');
   const answers = new Map<string, string>();
@@ -107,7 +134,7 @@ export function trackDeposits(
     }
     const key = number ? `${bank}|${numberKey(number)}` : `${bank}|${row.currency}|pool`;
     const id = number
-      ? `deposit-${bank}-${number}`
+      ? `deposit-${bank}-${numberKey(number)}`
       : `deposit-${bank}-${row.currency.toLowerCase()}-pool`;
     let account = discovered.get(key);
     if (!account) {

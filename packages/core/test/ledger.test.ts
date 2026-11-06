@@ -1,9 +1,10 @@
 import { describe, expect, it } from 'vitest';
+import { buildLedger } from '../src/ledger/build';
 import { balanceOn } from '../src/views/balances';
-import { loadWorld } from './helpers/world';
+import { loadWorld, WORLD_TODAY, worldConfig, worldFiles } from './helpers/world';
 
 const ledger = loadWorld();
-const DEPOSIT = 'deposit-combank-003099999999';
+const DEPOSIT = 'deposit-combank-3099999999';
 
 describe('buildLedger on the fixture world', () => {
   it('finds every account, including the discovered deposit', () => {
@@ -102,6 +103,26 @@ describe('buildLedger on the fixture world', () => {
     ]);
     expect(again.needs.map((need) => need.type)).not.toContain('card-due');
     expect(again.unusedDecisions).toEqual(['a2']);
+  });
+
+  it('marks a file it cannot read safely as unreadable instead of failing', () => {
+    const boc = worldFiles().find((file) => file.name.startsWith('BOC_0011111111'));
+    if (!boc) throw new Error('fixture missing');
+    const broken = {
+      ...boc,
+      path: 'boc/broken.csv',
+      name: 'broken.csv',
+      text: boc.text.replace('"3,500.00"', '"99999999999999999.00"'),
+    };
+    const result = buildLedger({
+      files: [...worldFiles(), broken],
+      config: worldConfig(),
+      decisions: [],
+      rates: [],
+      today: WORLD_TODAY,
+    });
+    expect(result.files.find((file) => file.path === 'boc/broken.csv')?.status).toBe('unreadable');
+    expect(result.accounts).toHaveLength(6);
   });
 
   it('is plain data', () => {

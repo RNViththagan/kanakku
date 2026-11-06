@@ -354,10 +354,11 @@ export function matchTransfers(
     }
     if (!hasHint(row, ctx.youNames)) continue;
     const reach = addDays(row.date, ctx.windowDays);
+    const recent = addDays(row.date, -ctx.windowDays);
     const waiting = ctx.accounts.some((account) => {
       if (account.id === row.account || account.closed) return false;
       const lastCovered = ctx.coverage[account.id]?.lastCovered;
-      return lastCovered !== undefined && lastCovered < reach;
+      return lastCovered !== undefined && lastCovered < reach && lastCovered >= recent;
     });
     rows.set(id, { ...row, flag: waiting ? 'waiting' : 'possible' });
   }

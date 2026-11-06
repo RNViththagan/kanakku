@@ -1,10 +1,18 @@
 import { bankPlugins } from '../banks/registry';
-import type { BankPlugin, FileInput, Issue, ParsedStatement, Period } from '../banks/types';
+import type {
+  BankPlugin,
+  FileInput,
+  Issue,
+  ParsedStatement,
+  Period,
+  StatementFormat,
+} from '../banks/types';
 import type { Account } from '../config/schema';
 import type { Decision } from '../decisions/load';
 import { diffDays } from '../model/dates';
 import { hashText } from '../model/hash';
 import { decimalToMinor } from '../model/money';
+import type { IsoDate } from '../model/types';
 import { accountLabel, parseTidyName, tidyName } from '../tidy/names';
 import { assignAccount, maskFits } from './assign';
 import { type CardCycle, cardCycles, cycleFor } from './cards';
@@ -32,6 +40,7 @@ interface Entry {
   parsed: ParsedStatement;
   rows: MoneyRow[];
   period?: Period;
+  closing?: { date: IsoDate; balance: number };
   plugin: BankPlugin;
   account: Account;
 }
@@ -75,6 +84,28 @@ function readFile(
   status.bank = plugin.id;
   status.format = format.id;
   if (file.folderBank && file.folderBank !== plugin.id) status.problems.push('wrong-folder');
+  try {
+    return readDetected(file, status, plugin, format, ctx, drafts);
+  } catch (problem) {
+    status.status = 'unreadable';
+    status.issues.push({
+      level: 'error',
+      code: 'read-failed',
+      message: `Kanakku could not read this file: ${(problem as Error).message}`,
+      file: file.path,
+    });
+    return { status };
+  }
+}
+
+function readDetected(
+  file: FileInput,
+  status: FileStatus,
+  plugin: BankPlugin,
+  format: StatementFormat,
+  ctx: { plugins: BankPlugin[]; accounts: Account[]; decisions: Decision[] },
+  drafts: NeedDraft[],
+): { status: FileStatus; entry?: Entry } {
   const parsed = applyUnreadableShare(format.parse(file));
   status.issues.push(...parsed.issues.map((issue) => ({ ...issue, file: file.path })));
   if (parsed.issues.some((issue) => issue.level === 'error')) {
@@ -130,6 +161,12 @@ function readFile(
   status.issues.push(...ordered.issues);
   const period = filePeriod(parsed, file.name, ordered.rows);
   const entry: Entry = { file, status, parsed, rows: ordered.rows, plugin, account };
+  if (parsed.closing) {
+    entry.closing = {
+      date: parsed.closing.date,
+      balance: decimalToMinor(parsed.closing.balance, account.currency),
+    };
+  }
   if (period) {
     entry.period = { from: period.from, to: period.to };
     status.period = entry.period;
@@ -301,35 +338,21 @@ export function buildLedger(input: LedgerInput): Ledger {
       })),
     );
     transactions.push(...merged.transactions);
-    closings[accountId] = group.flatMap((entry) =>
-      entry.parsed.closing
-        ? [
-            {
-              date: entry.parsed.closing.date,
-              balance: decimalToMinor(entry.parsed.closing.balance, account.currency),
-            },
-          ]
-        : [],
-    );
+    closings[accountId] = group.flatMap((entry) => (entry.closing ? [entry.closing] : []));
     if (account.type !== 'credit-card') {
       coverage[accountId] = accountCoverage({
         account,
-        files: group.flatMap((entry) => {
-          if (!entry.period) return [];
-          const closing = entry.parsed.closing;
-          return [
-            {
-              path: entry.file.path,
-              period: entry.period,
-              ...(closing && {
-                closing: {
-                  date: closing.date,
-                  balance: decimalToMinor(closing.balance, account.currency),
+        files: group.flatMap((entry) =>
+          entry.period
+            ? [
+                {
+                  path: entry.file.path,
+                  period: entry.period,
+                  ...(entry.closing && { closing: entry.closing }),
                 },
-              }),
-            },
-          ];
-        }),
+              ]
+            : [],
+        ),
         transactions: merged.transactions,
         breaks: merged.breaks,
         today,

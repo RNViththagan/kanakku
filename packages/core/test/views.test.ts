@@ -18,7 +18,7 @@ describe('netWorthSeries', () => {
       'cb-card': -450050,
       'hnb-lkr': 5495310,
       'hnb-usd': 36012000,
-      'deposit-combank-003099999999': 0,
+      'deposit-combank-3099999999': 0,
     });
     expect(january?.total).toBe(86707260);
     expect(january?.unknown).toEqual([]);
@@ -88,7 +88,7 @@ describe('transferMatrix', () => {
   it('totals what arrived between each pair of accounts', () => {
     expect(transferMatrix(ledger, range)).toEqual([
       { from: 'boc-main', to: 'cb-savings', amount: 4000000, count: 1 },
-      { from: 'cb-savings', to: 'deposit-combank-003099999999', amount: 12000000, count: 1 },
+      { from: 'cb-savings', to: 'deposit-combank-3099999999', amount: 12000000, count: 1 },
       { from: 'hnb-lkr', to: 'cb-savings', amount: 10000000, count: 1 },
       { from: 'hnb-usd', to: 'hnb-lkr', amount: 15000000, count: 1 },
     ]);

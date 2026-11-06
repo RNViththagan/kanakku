@@ -53,7 +53,7 @@ describe('trackDeposits', () => {
     ]);
     expect(result.accounts).toEqual([
       expect.objectContaining({
-        id: 'deposit-combank-003012345678',
+        id: 'deposit-combank-3012345678',
         bank: 'combank',
         type: 'fixed-deposit',
         currency: 'LKR',
@@ -65,7 +65,7 @@ describe('trackDeposits', () => {
       expect.objectContaining({
         out: 'p',
         from: 'cb',
-        to: 'deposit-combank-003012345678',
+        to: 'deposit-combank-3012345678',
         rule: 'deposit',
         status: 'one-sided',
         amountOut: 10000000,
@@ -73,7 +73,7 @@ describe('trackDeposits', () => {
     ]);
     expect(result.txns[0]).toMatchObject({ kind: 'transfer', transfer: result.transfers[0]?.id });
     expect(result.moves).toEqual([
-      { account: 'deposit-combank-003012345678', date: '2026-03-29', amount: 10000000 },
+      { account: 'deposit-combank-3012345678', date: '2026-03-29', amount: 10000000 },
     ]);
   });
 
@@ -160,7 +160,7 @@ describe('trackDeposits', () => {
       tx('r2', 'cb', '2026-07-11', 7000000, ['deposit-return']),
     ]);
     const to = (id: string) => result.transfers.find((transfer) => transfer.in === id)?.from;
-    expect(to('r1')).toBe('deposit-combank-003000000001');
+    expect(to('r1')).toBe('deposit-combank-3000000001');
     expect(to('r2')).toBe('deposit-combank-lkr-pool');
   });
 
@@ -221,9 +221,9 @@ describe('trackDeposits', () => {
       tx('i', 'cb', '2026-07-01', 88767, ['deposit-interest'], '3011112222'),
       tx('r', 'cb', '2026-07-01', 15000000, ['deposit-return'], '3011112222'),
     ]);
-    expect(result.accounts.map((account) => account.id)).toEqual(['deposit-combank-003011112222']);
+    expect(result.accounts.map((account) => account.id)).toEqual(['deposit-combank-3011112222']);
     expect(result.transfers.find((transfer) => transfer.in === 'r')?.from).toBe(
-      'deposit-combank-003011112222',
+      'deposit-combank-3011112222',
     );
     expect(result.moves.reduce((sum, move) => sum + move.amount, 0)).toBe(0);
     expect(result.needs).toEqual([]);
@@ -237,7 +237,7 @@ describe('trackDeposits', () => {
       tx('r', 'cb', '2026-08-07', 60000001, ['deposit-return']),
     ]);
     expect(result.transfers.find((transfer) => transfer.in === 'r')).toMatchObject({
-      from: 'deposit-combank-003000000012',
+      from: 'deposit-combank-3000000012',
       amountOut: 60000000,
     });
     expect(result.txns.find((row) => row.id === 'r')?.parts).toEqual([
@@ -245,6 +245,38 @@ describe('trackDeposits', () => {
       { kind: 'income', category: 'Interest', amount: 1 },
     ]);
     expect(result.needs).toEqual([]);
+  });
+
+  it('keeps the same deposit id whichever spelling of the number comes first', () => {
+    const returnOnly = run([
+      tx('r', 'cb', '2026-07-01', 15000000, ['deposit-return'], '3011112222'),
+    ]);
+    const both = run([
+      tx('p', 'cb', '2026-06-01', -15000000, ['deposit-placement'], '003011112222'),
+      tx('r', 'cb', '2026-07-01', 15000000, ['deposit-return'], '3011112222'),
+    ]);
+    expect(returnOnly.accounts.map((account) => account.id)).toEqual(
+      both.accounts.map((account) => account.id),
+    );
+  });
+
+  it('leaves a placement to one of your own savings accounts for transfer matching', () => {
+    const own: Account = {
+      id: 'cb2',
+      name: 'Second',
+      bank: 'combank',
+      type: 'savings',
+      currency: 'LKR',
+      number: '0022222222',
+    };
+    const result = run(
+      [tx('p', 'cb', '2026-03-29', -10000000, ['deposit-placement'], '0022222222')],
+      [savings, usd, own],
+    );
+    expect(result.accounts).toEqual([]);
+    expect(result.transfers).toEqual([]);
+    expect(result.txns[0]?.tags).toContain('transfer-hint');
+    expect(result.txns[0]?.tags).not.toContain('deposit-placement');
   });
 
   it('skips rows that are already in a transfer', () => {

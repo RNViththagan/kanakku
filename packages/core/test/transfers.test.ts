@@ -194,6 +194,12 @@ describe('matchTransfers', () => {
     expect(run([row], { coverage: withEmpty }).txns[0]?.flag).toBe('possible');
   });
 
+  it('does not wait on an account whose statements stopped long ago', () => {
+    const coverage = { ...coveredAll, D: { firstKnown: '2023-01-01', lastCovered: '2024-03-31' } };
+    const row = tx('o', 'A', '2026-06-05', -1000000, { tags: ['transfer-hint'] });
+    expect(run([row], { coverage }).txns[0]?.flag).toBe('possible');
+  });
+
   it('marks unmatched hinted rows as possible transfers', () => {
     const row = tx('o', 'A', '2026-11-05', -1000000, { tags: ['transfer-hint'] });
     expect(run([row]).txns[0]?.flag).toBe('possible');

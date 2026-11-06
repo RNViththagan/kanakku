@@ -23,6 +23,8 @@ export { parseCsv, stripBom } from './parse/csv';
 export { parseRatesCsv, serializeRatesCsv } from './rates/csv';
 export type { RateQuote } from './rates/types';
 export { parseTidyName, tidyName } from './tidy/names';
+export type { TidyProposal } from './tidy/plan';
+export { planTidy } from './tidy/plan';
 export { balanceOn, rateBookFor } from './views/balances';
 export type { CashFlowMonth } from './views/cash-flow';
 export { cashFlowByMonth } from './views/cash-flow';

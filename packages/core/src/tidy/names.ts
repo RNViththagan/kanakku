@@ -11,7 +11,7 @@ const TYPE_LABELS: Record<AccountType, string> = {
 };
 
 const TIDY =
-  /^([A-Za-z][A-Za-z0-9]*)_([^_]+)(?:_([A-Z]{3}))?_(\d{4}-\d{2}-\d{2})_to_(\d{4}-\d{2}-\d{2})(_partial)?\.([A-Za-z0-9]+)$/;
+  /^([A-Za-z][A-Za-z0-9]*)_([^_]+)(?:_([A-Z]{3}))?_(\d{4}-\d{2}-\d{2})_to_(\d{4}-\d{2}-\d{2})(_partial)?(?:_\d+)?\.([A-Za-z0-9]+)$/;
 
 export interface TidyNameParts {
   bank: string;

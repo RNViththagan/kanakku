@@ -1,5 +1,14 @@
 import type { CoverageSegment, CurrencyCode } from '@kanakku/core';
-import { Box, Card, CardContent, PageTitle, Stack, Tooltip, Typography } from '@wso2/oxygen-ui';
+import {
+  Box,
+  Card,
+  CardContent,
+  PageTitle,
+  Stack,
+  Tooltip,
+  Typography,
+  useColorScheme,
+} from '@wso2/oxygen-ui';
 import { AreaChart, BarChart, YAxis } from '@wso2/oxygen-ui-charts-react';
 import type { ReactNode } from 'react';
 import { formatMajor, money, shortDate } from './format';
@@ -115,6 +124,23 @@ export function CoverageBar({
   );
 }
 
+export interface MoneyColors {
+  income: string;
+  outgoing: string;
+  savings: string;
+}
+
+const MONEY_COLORS: Record<'light' | 'dark', MoneyColors> = {
+  light: { income: '#2a78d6', outgoing: '#eb6834', savings: '#1baf7a' },
+  dark: { income: '#3987e5', outgoing: '#d95926', savings: '#199e70' },
+};
+
+export function useMoneyColors(): MoneyColors {
+  const { mode, systemMode } = useColorScheme();
+  const dark = mode === 'dark' || (mode === 'system' && systemMode === 'dark');
+  return dark ? MONEY_COLORS.dark : MONEY_COLORS.light;
+}
+
 export interface ChartPoint {
   label: string;
   [series: string]: string | number;
@@ -175,6 +201,7 @@ export function MoneyBars({
   locale,
   stacked = false,
   height = 280,
+  colors,
 }: {
   data: ChartPoint[];
   series: Array<{ key: string; name: string }>;
@@ -182,6 +209,7 @@ export function MoneyBars({
   locale: string;
   stacked?: boolean;
   height?: number;
+  colors?: string[];
 }) {
   return (
     <BarChart
@@ -196,6 +224,7 @@ export function MoneyBars({
       yAxis={{ show: false }}
       legend={{ show: series.length > 1 }}
       tooltip={moneyTooltip(currency, locale)}
+      colors={colors}
     >
       {valueAxis(locale)}
     </BarChart>

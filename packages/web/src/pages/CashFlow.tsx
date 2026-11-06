@@ -1,19 +1,11 @@
 import { cashFlowByMonth } from '@kanakku/core';
 import { Grid, Table, TableBody, TableCell, TableHead, TableRow } from '@wso2/oxygen-ui';
 import { useMemo } from 'react';
+import { FlowChart } from '../FlowChart';
+import { categoryTotals, moneyFlow } from '../flow';
 import { monthLabel, toMajor } from '../format';
-import { Amount, Empty, MoneyBars, Section, Title } from '../ui';
+import { Amount, Empty, MoneyBars, Section, Title, useMoneyColors } from '../ui';
 import type { PageProps } from './types';
-
-function totals(parts: Array<Record<string, number>>): Array<[string, number]> {
-  const sums = new Map<string, number>();
-  for (const part of parts) {
-    for (const [category, amount] of Object.entries(part)) {
-      sums.set(category, (sums.get(category) ?? 0) + amount);
-    }
-  }
-  return [...sums].sort((a, b) => b[1] - a[1]);
-}
 
 function Split({
   title,
@@ -50,9 +42,11 @@ function Split({
 
 export function CashFlow({ ledger, range, rangeLabel }: PageProps) {
   const { homeCurrency: home, locale } = ledger;
+  const colors = useMoneyColors();
   const months = useMemo(() => cashFlowByMonth(ledger, range), [ledger, range]);
-  const income = useMemo(() => totals(months.map((month) => month.incomeBy)), [months]);
-  const outgoing = useMemo(() => totals(months.map((month) => month.spendingBy)), [months]);
+  const flow = useMemo(() => moneyFlow(months), [months]);
+  const income = useMemo(() => categoryTotals(months.map((month) => month.incomeBy)), [months]);
+  const outgoing = useMemo(() => categoryTotals(months.map((month) => month.spendingBy)), [months]);
   const unvalued = [...new Set(months.flatMap((month) => month.unvalued))];
 
   return (
@@ -61,6 +55,9 @@ export function CashFlow({ ledger, range, rangeLabel }: PageProps) {
         title="Cash flow"
         subtitle={`${rangeLabel}, in ${home}. Transfers between your accounts are left out.`}
       />
+      <Section title="Money flow">
+        <FlowChart flow={flow} currency={home} locale={locale} />
+      </Section>
       <Section title="Income and outgoing by month">
         <MoneyBars
           data={months.map((month) => ({
@@ -74,6 +71,7 @@ export function CashFlow({ ledger, range, rangeLabel }: PageProps) {
           ]}
           currency={home}
           locale={locale}
+          colors={[colors.income, colors.outgoing]}
         />
         <Table size="small" sx={{ mt: 2 }}>
           <TableHead>

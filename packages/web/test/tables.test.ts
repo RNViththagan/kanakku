@@ -3,6 +3,8 @@ import { describe, expect, it } from 'vitest';
 import { loadWorld } from '../../core/test/helpers/world';
 import { transactionRows } from '../src/model';
 import {
+  categoryLabel,
+  categoryOptions,
   conversionSummary,
   coverageBar,
   depositRows,
@@ -178,6 +180,44 @@ describe('filterTransactions', () => {
     expect(card.map((row) => row.description)).toEqual([
       'BOOKSHOP COLOMBO 07 COLK / 000000000013 / -',
     ]);
+  });
+});
+
+describe('transaction categories', () => {
+  const rows = transactionRows(ledger);
+  const feeTransfer = rows.find(
+    (row) => row.accountId === 'boc-main' && row.date === '2026-01-10' && row.kind === 'transfer',
+  );
+
+  it('finds fees carried inside transfers, so the list adds up to the cash flow total', () => {
+    const fees = filterTransactions(rows, { category: 'Fees' });
+    expect(fees.filter((row) => row.kind === 'transfer').map((row) => row.date)).toEqual([
+      '2026-01-21',
+      '2026-01-10',
+    ]);
+    const total = fees
+      .flatMap((row) => row.parts)
+      .filter((part) => part.category === 'Fees')
+      .reduce((sum, part) => sum - part.amount, 0);
+    expect(total).toBe(11000);
+  });
+
+  it('searches the categories carried inside a transaction', () => {
+    expect(filterTransactions(rows, { search: 'fees', kind: 'transfer' })).toHaveLength(2);
+  });
+
+  it('names the category, or what a transfer carried', () => {
+    expect(feeTransfer && categoryLabel(feeTransfer, 'en-LK')).toBe('Fees 25.00 LKR');
+    const salary = rows.find((row) => row.category === 'Salary');
+    expect(salary && categoryLabel(salary, 'en-LK')).toBe('Salary');
+  });
+
+  it('offers each category once, including ones carried inside transfers', () => {
+    expect(categoryOptions(rows.filter((row) => row.kind === 'transfer'))).toEqual(['Fees']);
+    const all = categoryOptions(rows);
+    expect(all).toEqual([...new Set(all)].sort());
+    expect(all).toContain('Salary');
+    expect(all).not.toContain('');
   });
 });
 

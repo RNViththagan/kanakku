@@ -14,6 +14,7 @@ import {
   monthKey,
   type NeedsItem,
   netWorthSeries,
+  type Part,
   parseYmd,
   rateBookFor,
   startOfMonth,
@@ -202,6 +203,7 @@ export interface TransactionRow {
   currency: CurrencyCode;
   kind: Kind | '';
   category: string;
+  parts: Part[];
   files: string;
   flag?: string;
   transfer?: string;
@@ -222,6 +224,7 @@ export function transactionRows(ledger: Ledger): TransactionRow[] {
       currency: row.currency,
       kind: row.kind,
       category: row.category,
+      parts: row.parts,
       files: [...new Set(row.sources.map((source) => source.file))].join(', '),
     };
     if (row.flag) result.flag = row.flag;

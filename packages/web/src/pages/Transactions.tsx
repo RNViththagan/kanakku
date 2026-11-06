@@ -2,7 +2,7 @@ import { DataGrid, MenuItem, Stack, TextField } from '@wso2/oxygen-ui';
 import { useMemo, useState } from 'react';
 import { money, shortDate } from '../format';
 import { linkRange, type TransactionRow, transactionRows } from '../model';
-import { filterTransactions } from '../tables';
+import { categoryLabel, categoryOptions, filterTransactions } from '../tables';
 import { Section, Title } from '../ui';
 import type { PageProps } from './types';
 
@@ -45,7 +45,12 @@ export function TransactionTable({
       width: 110,
       valueFormatter: (value: string) => KINDS[value] ?? value,
     },
-    { field: 'category', headerName: 'Category', width: 150 },
+    {
+      field: 'category',
+      headerName: 'Category',
+      width: 170,
+      valueGetter: (_value: string, row) => categoryLabel(row, locale),
+    },
     {
       field: 'transferWith',
       headerName: 'Transfer',
@@ -79,10 +84,7 @@ export function Transactions({ ledger, route, range, rangeLabel }: PageProps) {
   const [category, setCategory] = useState(query.category ?? '');
   const linked = linkRange(route.query, range);
   const { from, to } = linked;
-  const categories = useMemo(
-    () => [...new Set(all.map((row) => row.category).filter(Boolean))].sort(),
-    [all],
-  );
+  const categories = useMemo(() => categoryOptions(all), [all]);
   const rows = useMemo(
     () => filterTransactions(all, { search, account, kind, category, from, to }),
     [all, search, account, kind, category, from, to],

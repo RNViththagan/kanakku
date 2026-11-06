@@ -17,6 +17,7 @@ import {
   type Transfer,
   transferMatrix,
 } from '@kanakku/core';
+import { money } from './format';
 import type { TransactionRow } from './model';
 
 export const UNKNOWN_ACCOUNT = 'Unknown';
@@ -270,14 +271,36 @@ export function filterTransactions(
     (row) =>
       (!filter.account || row.accountId === filter.account) &&
       (!filter.kind || row.kind === filter.kind) &&
-      (!filter.category || row.category === filter.category) &&
+      (!filter.category ||
+        row.category === filter.category ||
+        row.parts.some((part) => part.category === filter.category)) &&
       (!filter.from || row.date >= filter.from) &&
       (!filter.to || row.date <= filter.to) &&
       (!search ||
-        [row.description, row.accountName, row.category, row.transferWith ?? ''].some((text) =>
-          text.toLowerCase().includes(search),
-        )),
+        [
+          row.description,
+          row.accountName,
+          row.category,
+          row.transferWith ?? '',
+          ...row.parts.map((part) => part.category),
+        ].some((text) => text.toLowerCase().includes(search))),
   );
+}
+
+export function categoryLabel(row: TransactionRow, locale: string): string {
+  if (row.category) return row.category;
+  return row.parts
+    .filter((part) => part.kind === 'income' || part.kind === 'spending')
+    .map((part) => `${part.category} ${money(Math.abs(part.amount), row.currency, locale)}`)
+    .join(', ');
+}
+
+export function categoryOptions(rows: TransactionRow[]): string[] {
+  const names = new Set(
+    rows.flatMap((row) => [row.category, ...row.parts.map((part) => part.category)]),
+  );
+  names.delete('');
+  return [...names].sort();
 }
 
 export interface DepositRow {

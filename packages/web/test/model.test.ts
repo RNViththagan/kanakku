@@ -175,6 +175,16 @@ describe('transactionRows', () => {
     expect(sent?.transferWith).toBe('ComBank Savings');
   });
 
+  it('keeps the parts a transaction is split into', () => {
+    const fee = transactionRows(ledger).find(
+      (row) => row.accountId === 'boc-main' && row.date === '2026-01-10' && row.kind === 'transfer',
+    );
+    expect(fee?.parts).toEqual([
+      { kind: 'transfer', category: '', amount: -4000000 },
+      { kind: 'spending', category: 'Fees', amount: -2500 },
+    ]);
+  });
+
   it('is empty for an empty ledger', () => {
     expect(transactionRows(empty)).toEqual([]);
   });

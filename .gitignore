@@ -17,3 +17,6 @@ coverage/
 /dev-data/
 config.yaml
 CLAUDE.local.md
+.private-strings
+!demo/**/*.csv
+!demo/**/config.yaml

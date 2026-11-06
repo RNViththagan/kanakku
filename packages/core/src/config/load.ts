@@ -1,8 +1,9 @@
-import { type Document, LineCounter, parseDocument } from 'yaml';
+import { LineCounter, parseDocument } from 'yaml';
 import { bankPlugins } from '../banks/registry';
 import type { BankPlugin } from '../banks/types';
 import { decimalToMinor, majorToMinor, normalizeAmount } from '../model/money';
 import type { CurrencyCode } from '../model/types';
+import { formatPath, lineOf, type Path } from '../parse/yaml-paths';
 import {
   DEFAULT_CATEGORIES,
   DEFAULT_LOCALE,
@@ -18,27 +19,8 @@ import {
   type UserRule,
 } from './schema';
 
-type Path = ReadonlyArray<PropertyKey>;
 type RawAccount = NonNullable<RawConfig['accounts']>[number];
 type RawRule = NonNullable<RawConfig['rules']>[number];
-
-export function formatPath(path: Path): string {
-  return path
-    .map((part, index) =>
-      typeof part === 'number' ? `[${part}]` : `${index > 0 ? '.' : ''}${String(part)}`,
-    )
-    .join('');
-}
-
-function lineOf(doc: Document, lines: LineCounter, path: Path): number | undefined {
-  for (let size = path.length; size >= 0; size -= 1) {
-    const node = size === 0 ? doc.contents : doc.getIn(path.slice(0, size), true);
-    if (node && typeof node === 'object' && 'range' in node && Array.isArray(node.range)) {
-      return lines.linePos(node.range[0]).line;
-    }
-  }
-  return undefined;
-}
 
 function toDecimal(value: number | string): string {
   const decimal = normalizeAmount(String(value));

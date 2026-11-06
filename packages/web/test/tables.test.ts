@@ -226,11 +226,81 @@ describe('depositRows', () => {
     expect(depositRows(ledger)).toEqual([
       {
         account: ledger.accounts.at(-1),
+        status: 'active',
         balance: 12000000,
         principal: 12000000,
         start: '2026-02-01',
+        interest: 0,
       },
     ]);
+  });
+
+  it('shows a withdrawn deposit with its interest from either kind of bank line', () => {
+    const deposit = ledger.accounts.at(-1);
+    const sample = ledger.transactions.find((row) => row.account === 'cb-savings');
+    if (!deposit || !sample) throw new Error('fixture deposit missing');
+    const credit = {
+      ...sample,
+      id: 'efd-interest',
+      date: '2026-02-15',
+      amount: 30000,
+      description: 'Interest from eFD:3099999999 / - / -',
+      kind: 'income' as const,
+      category: 'Interest',
+      tags: ['deposit-interest' as const],
+      deposit: '3099999999',
+      parts: [{ kind: 'income' as const, category: 'Interest', amount: 30000 }],
+    };
+    const closing = {
+      ...sample,
+      id: 'closing',
+      date: '2026-02-15',
+      amount: 12016027,
+      description: 'Principal from eFD:3099999999 / - / -',
+      kind: 'transfer' as const,
+      category: '',
+      parts: [
+        { kind: 'transfer' as const, category: '', amount: 12000000 },
+        { kind: 'income' as const, category: 'Interest', amount: 16027 },
+      ],
+    };
+    const withdrawn: Ledger = {
+      ...ledger,
+      transactions: [...ledger.transactions, credit, closing],
+      depositMoves: [
+        ...ledger.depositMoves,
+        { account: deposit.id, date: '2026-02-15', amount: -12000000 },
+      ],
+      transfers: [
+        ...ledger.transfers,
+        {
+          id: 'closing-transfer',
+          from: deposit.id,
+          to: 'cb-savings',
+          date: '2026-02-15',
+          amountOut: 12000000,
+          currencyOut: 'LKR',
+          amountIn: 12000000,
+          currencyIn: 'LKR',
+          fee: 0,
+          rule: 'deposit',
+          status: 'one-sided',
+          in: 'closing',
+        },
+      ],
+    };
+    const row = depositRows(withdrawn)[0];
+    expect(row).toMatchObject({
+      status: 'withdrawn',
+      balance: 0,
+      principal: 12000000,
+      start: '2026-02-01',
+      closed: '2026-02-15',
+      returned: 12000000,
+      held: 14,
+      interest: 46027,
+    });
+    expect(row?.yearlyRate).toBeCloseTo(10, 1);
   });
 
   it('works out maturity and days left from the term', () => {

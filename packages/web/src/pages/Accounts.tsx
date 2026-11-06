@@ -1,5 +1,7 @@
 import {
+  FormControlLabel,
   Link,
+  Switch,
   Table,
   TableBody,
   TableCell,
@@ -11,6 +13,7 @@ import { useMemo } from 'react';
 import { money, shortDate } from '../format';
 import { accountsByBank, rangeEndingAt } from '../model';
 import { hrefFor } from '../routes';
+import { useStoredChoice } from '../stored';
 import { Amount, CoverageBar, Empty, Section, Title } from '../ui';
 import type { PageProps } from './types';
 
@@ -25,12 +28,35 @@ export function Accounts({ ledger }: PageProps) {
   const { homeCurrency: home, locale, today } = ledger;
   const banks = useMemo(() => accountsByBank(ledger), [ledger]);
   const year = rangeEndingAt(today, 12);
+  const [closed, setClosed] = useStoredChoice('kanakku-closed-accounts', ['hide', 'show'], 'hide');
+  const closedCount = banks.reduce(
+    (sum, bank) => sum + bank.accounts.filter((row) => row.closed).length,
+    0,
+  );
+  const shown = banks
+    .map((bank) => ({
+      ...bank,
+      accounts: bank.accounts.filter((row) => closed === 'show' || !row.closed),
+    }))
+    .filter((bank) => bank.accounts.length > 0);
 
   return (
     <>
       <Title title="Accounts" subtitle="Balances from your latest statements" />
       {banks.length === 0 ? <Empty>No accounts yet. Add them to config.yaml.</Empty> : null}
-      {banks.map((bank) => (
+      {closedCount > 0 ? (
+        <FormControlLabel
+          sx={{ mt: -1, mb: 2 }}
+          control={
+            <Switch
+              checked={closed === 'show'}
+              onChange={(event) => setClosed(event.target.checked ? 'show' : 'hide')}
+            />
+          }
+          label={`Show closed accounts and withdrawn deposits (${closedCount})`}
+        />
+      ) : null}
+      {shown.map((bank) => (
         <Section key={bank.bank} title={bank.name}>
           <Table size="small">
             <TableHead>

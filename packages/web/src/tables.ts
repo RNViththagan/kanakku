@@ -12,6 +12,7 @@ import {
   type Ledger,
   maturityOf,
   minorUnits,
+  numberKey,
   type RateUse,
   rateBookFor,
   type Transfer,
@@ -305,35 +306,89 @@ export function categoryOptions(rows: TransactionRow[]): string[] {
 
 export interface DepositRow {
   account: Account;
+  status: 'active' | 'withdrawn';
   balance: number;
+  interest: number;
   principal?: number;
   start?: IsoDate;
   maturity?: IsoDate;
   rate?: number;
   daysLeft?: number;
+  closed?: IsoDate;
+  returned?: number;
+  held?: number;
+  yearlyRate?: number;
+}
+
+function depositInterest(ledger: Ledger): Map<string, number> {
+  const deposits = ledger.accounts.filter((account) => account.type === 'fixed-deposit');
+  const ids = new Set(deposits.map((account) => account.id));
+  const byNumber = new Map<string, string>();
+  for (const account of deposits) {
+    if (account.number) byNumber.set(numberKey(account.number), account.id);
+  }
+  const linked = new Map<string, string>();
+  for (const transfer of ledger.transfers) {
+    const deposit = ids.has(transfer.from)
+      ? transfer.from
+      : ids.has(transfer.to)
+        ? transfer.to
+        : '';
+    if (!deposit) continue;
+    for (const id of [transfer.out, transfer.in]) if (id) linked.set(id, deposit);
+  }
+  const totals = new Map<string, number>();
+  for (const row of ledger.transactions) {
+    const deposit =
+      linked.get(row.id) ?? (row.deposit ? byNumber.get(numberKey(row.deposit)) : undefined);
+    if (!deposit) continue;
+    const earned = row.parts
+      .filter((part) => part.kind === 'income')
+      .reduce((sum, part) => sum + part.amount, 0);
+    if (earned !== 0) totals.set(deposit, (totals.get(deposit) ?? 0) + earned);
+  }
+  return totals;
 }
 
 export function depositRows(ledger: Ledger): DepositRow[] {
+  const interest = depositInterest(ledger);
   return ledger.accounts
     .filter((account) => account.type === 'fixed-deposit')
     .map((account) => {
-      const placed = ledger.depositMoves
-        .filter((move) => move.account === account.id && move.amount > 0)
-        .sort((a, b) => (a.date < b.date ? -1 : a.date > b.date ? 1 : 0))[0];
+      const moves = ledger.depositMoves
+        .filter((move) => move.account === account.id)
+        .sort((a, b) => (a.date < b.date ? -1 : a.date > b.date ? 1 : 0));
+      const placed = moves.find((move) => move.amount > 0);
+      const out = moves.filter((move) => move.amount < 0);
+      const balance = balanceOn(ledger, account.id, ledger.today) ?? 0;
+      const withdrawn =
+        (account.closed !== undefined && account.closed <= ledger.today) ||
+        (balance === 0 && out.length > 0);
       const row: DepositRow = {
         account,
-        balance: balanceOn(ledger, account.id, ledger.today) ?? 0,
+        status: withdrawn ? 'withdrawn' : 'active',
+        balance,
+        interest: interest.get(account.id) ?? 0,
       };
       const principal = account.deposit?.principal ?? placed?.amount;
       if (principal !== undefined) row.principal = principal;
       const start = account.deposit?.start ?? placed?.date;
       if (start) row.start = start;
       const maturity = maturityOf(account.deposit);
-      if (maturity) {
-        row.maturity = maturity;
-        row.daysLeft = Math.max(0, diffDays(ledger.today, maturity));
-      }
+      if (maturity) row.maturity = maturity;
+      if (maturity && !withdrawn) row.daysLeft = Math.max(0, diffDays(ledger.today, maturity));
       if (account.deposit?.rate !== undefined) row.rate = account.deposit.rate;
+      if (withdrawn) {
+        const closed = out.at(-1)?.date ?? account.closed;
+        if (closed) row.closed = closed;
+        if (out.length > 0) row.returned = -out.reduce((sum, move) => sum + move.amount, 0);
+        if (start && closed) {
+          row.held = diffDays(start, closed);
+          if (row.held > 0 && principal) {
+            row.yearlyRate = (row.interest / principal) * (365 / row.held) * 100;
+          }
+        }
+      }
       return row;
     });
 }

@@ -29,7 +29,7 @@ const EVENT_TAGS = ['deposit-placement', 'deposit-return', 'deposit-closure'] as
 
 const REDEMPTION_INTEREST_SHARE = 0.25;
 
-function numberKey(number: string): string {
+export function numberKey(number: string): string {
   return number.replace(/[\s-]/g, '').replace(/^0+/, '');
 }
 

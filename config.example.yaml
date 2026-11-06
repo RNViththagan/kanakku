@@ -1,0 +1,73 @@
+# Kanakku settings. Copy to <your data folder>/kanakku/config.yaml and edit.
+version: 1
+homeCurrency: LKR
+locale: en-LK
+
+# Where statements live, relative to the data folder or absolute.
+folders:
+  - path: Bank/BOC
+    bank: boc
+  - path: Bank/ComBank
+    bank: combank
+  - path: Bank/HNB
+    bank: hnb
+
+# Every account, card and deposit you have. Any bank can hold any type and currency.
+accounts:
+  - id: main
+    name: Main account
+    bank: boc
+    type: savings
+    currency: LKR
+    number: "0012345678"
+    opened: 2024-01-15
+  - id: card
+    name: Credit card
+    bank: combank
+    type: credit-card
+    currency: LKR
+    card:
+      statementDay: 5
+      dueDay: 26
+      limit: 300000
+  - id: dollars
+    name: Dollar savings
+    bank: hnb
+    type: savings
+    currency: USD
+    number: "12345XXXXX67"
+  - id: deposit-1
+    name: One-year deposit
+    bank: combank
+    type: fixed-deposit
+    currency: LKR
+    number: "003012345678"
+    deposit:
+      principal: 500000
+      start: 2026-01-10
+      months: 12
+      rate: 9.0
+
+# How your name appears in transfer descriptions.
+you:
+  names: ["A PERERA", "PERERA A"]
+
+transfers:
+  windowDays: 3
+  fees:
+    LKR: [25, 50]
+
+# hnb, numbers-lk, manual or off.
+rates:
+  source: hnb
+  options: {}
+  manual:
+    USD: 330.00
+
+rules:
+  - match: "SALARY"
+    kind: income
+    category: Salary
+  - match:
+      regex: "SUPERMARKET|GROCER"
+    category: Groceries

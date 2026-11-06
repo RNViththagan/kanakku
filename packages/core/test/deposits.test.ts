@@ -215,6 +215,38 @@ describe('trackDeposits', () => {
     expect(result.needs.map((need) => need.type)).toEqual(['deposit-before-statements']);
   });
 
+  it('matches deposit numbers with or without leading zeros', () => {
+    const result = run([
+      tx('p', 'cb', '2026-06-01', -15000000, ['deposit-placement'], '003011112222'),
+      tx('i', 'cb', '2026-07-01', 88767, ['deposit-interest'], '3011112222'),
+      tx('r', 'cb', '2026-07-01', 15000000, ['deposit-return'], '3011112222'),
+    ]);
+    expect(result.accounts.map((account) => account.id)).toEqual(['deposit-combank-003011112222']);
+    expect(result.transfers.find((transfer) => transfer.in === 'r')?.from).toBe(
+      'deposit-combank-003011112222',
+    );
+    expect(result.moves.reduce((sum, move) => sum + move.amount, 0)).toBe(0);
+    expect(result.needs).toEqual([]);
+  });
+
+  it('matches an early redemption with a little interest to the closest open deposit', () => {
+    const result = run([
+      tx('p1', 'cb', '2026-08-03', -50000000, ['deposit-placement'], '003000000011'),
+      tx('p2', 'cb', '2026-08-03', -60000000, ['deposit-placement'], '003000000012'),
+      tx('p3', 'cb', '2026-08-03', -65000000, ['deposit-placement'], '003000000013'),
+      tx('r', 'cb', '2026-08-07', 60000001, ['deposit-return']),
+    ]);
+    expect(result.transfers.find((transfer) => transfer.in === 'r')).toMatchObject({
+      from: 'deposit-combank-003000000012',
+      amountOut: 60000000,
+    });
+    expect(result.txns.find((row) => row.id === 'r')?.parts).toEqual([
+      { kind: 'transfer', category: '', amount: 60000000 },
+      { kind: 'income', category: 'Interest', amount: 1 },
+    ]);
+    expect(result.needs).toEqual([]);
+  });
+
   it('skips rows that are already in a transfer', () => {
     const paired = {
       ...tx('p', 'cb', '2026-03-29', -10000000, ['deposit-placement'], '003012345678'),

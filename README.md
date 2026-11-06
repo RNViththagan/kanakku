@@ -31,6 +31,19 @@ Kanakku (கணக்கு, "accounts" in Tamil) is a personal finance app that
 - **Banks are plug-ins.** A bank plug-in teaches Kanakku two things: how to read that bank's statement files, and what the bank's wording means (fees, interest, fixed deposits, transfers). Everything else is shared by all banks.
 - **Included plug-ins:** Bank of Ceylon (BOC), Commercial Bank (ComBank) and Hatton National Bank (HNB). Adding a bank means adding one plug-in.
 
+## Develop
+
+Needs Node 22 and pnpm 10.
+
+```
+pnpm install
+pnpm test
+pnpm check && pnpm lint
+pnpm --filter @kanakku/core report --data <your data folder>
+```
+
+The engine lives in `packages/core`. The local server and the web app come next. The design is in `docs/specs/`, and `docs/adding-a-bank.md` explains how to add a bank.
+
 ## License
 
 [MIT](LICENSE)

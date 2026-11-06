@@ -262,7 +262,8 @@ A one-sided transfer keeps the row out of income and spending. It never changes 
 - A deposit number not in config becomes a "discovered" fixed-deposit account. You can name it and add term, rate and maturity.
 - A placement is a transfer from the paying account to the deposit. A principal return is a transfer back. Interest is income in Interest.
 - Closure proceeds that mix principal and interest are split using the placed principal. When the placement is older than your statements, Needs you asks for the principal. Until you answer, the whole amount counts as principal.
-- A return that names no deposit goes to an open deposit at the same bank with the same principal. Otherwise it goes to that bank's pool of unnamed deposits, which is a discovered deposit account too.
+- Deposit numbers match with or without leading zeros. A bank may write `003012345678` when placing and `3012345678` when returning.
+- A return that names no deposit goes to an open deposit at the same bank with the same principal. Early withdrawals pay a little interest on top, so next comes the open deposit with the largest principal below the amount, when the extra is at most a quarter of that principal. The extra counts as interest. Otherwise the return goes to that bank's pool of unnamed deposits, which is a discovered deposit account too.
 - **Statements win.** A deposit's balance is built from its placements and returns. A config deposit with `principal` and `start` counts from `start` only when no placement for it appears in statements, and then Kanakku does not ask for its principal. When a placement appears and differs from the config principal, the statement wins and an issue is recorded.
 - **Never below zero.** A return larger than what Kanakku saw placed means the deposit is older than your statements. The excess counts as money from before your statements, the balance stays at zero, and Needs you asks you to add the deposit to config.
 - Net worth counts principal still placed. Interest counts when paid, not as it builds up.
@@ -633,7 +634,7 @@ Format `combank-card-csv`, for credit cards:
 - Rows are not strictly in date order. Debit is a charge. Credit is a payment or a refund.
 - No card number inside. The bank's download name is `transactions_history_current_period.csv`.
 
-Seen wording: `INTEREST` (interest), `ADVANCE INCOME TAX` (tax), `TRF TO: <deposit number>` (deposit placement), `IB Time Redemption Deposit` and `Principal from eFD` (deposit principal return), `Interest from eFD` (deposit interest), `INITIAL DEP` (opening deposit, kind `other` until you say otherwise), `CEFT` and `IBT` (transfer hints).
+Seen wording: `INTEREST` (interest), `ADVANCE INCOME TAX` (tax), `TRF TO: <deposit number>` (deposit placement, number with leading zeros), `Principal from eFD:<number>` (deposit principal return, number without leading zeros), `IB Time Redemption Deposit` (early withdrawal: principal plus a little interest, no number), `Interest from eFD:<number>` (deposit interest), `INITIAL DEP` (opening deposit, kind `other` until you say otherwise), `CEFT` and `IBT` (transfer hints).
 
 ### A.3 Hatton National Bank (`hnb`)
 

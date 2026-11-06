@@ -26,8 +26,10 @@ type Event =
 
 const EVENT_TAGS = ['deposit-placement', 'deposit-return', 'deposit-closure'] as const;
 
-function clean(number: string): string {
-  return number.replace(/[\s-]/g, '');
+const REDEMPTION_INTEREST_SHARE = 0.25;
+
+function numberKey(number: string): string {
+  return number.replace(/[\s-]/g, '').replace(/^0+/, '');
 }
 
 export function trackDeposits(
@@ -56,7 +58,7 @@ export function trackDeposits(
   const configFor = (bank: string, number: string) =>
     configured.find(
       (account) =>
-        account.bank === bank && account.number && clean(account.number) === clean(number),
+        account.bank === bank && account.number && numberKey(account.number) === numberKey(number),
     );
 
   const placedConfig = new Set<string>();
@@ -103,10 +105,11 @@ export function trackDeposits(
       const found = configFor(bank, number);
       if (found) return found;
     }
+    const key = number ? `${bank}|${numberKey(number)}` : `${bank}|${row.currency}|pool`;
     const id = number
       ? `deposit-${bank}-${number}`
       : `deposit-${bank}-${row.currency.toLowerCase()}-pool`;
-    let account = discovered.get(id);
+    let account = discovered.get(key);
     if (!account) {
       account = {
         id,
@@ -117,7 +120,7 @@ export function trackDeposits(
         discovered: true,
       };
       if (number) account.number = number;
-      discovered.set(id, account);
+      discovered.set(key, account);
     }
     return account;
   };
@@ -132,6 +135,29 @@ export function trackDeposits(
         outstanding.get(account.id) === amount,
     );
     candidates.sort((a, b) => ((started.get(a.id) ?? '') < (started.get(b.id) ?? '') ? -1 : 1));
+    return candidates[0];
+  };
+
+  const closestBelow = (row: Transaction): { deposit: Account; principal: number } | undefined => {
+    const bank = bankOf(row);
+    const candidates = [...configured, ...discovered.values()]
+      .filter(
+        (account) =>
+          account.bank === bank &&
+          account.currency === row.currency &&
+          account.number !== undefined,
+      )
+      .map((account) => ({ deposit: account, principal: outstanding.get(account.id) ?? 0 }))
+      .filter(
+        ({ principal }) =>
+          principal > 0 &&
+          principal <= row.amount &&
+          row.amount - principal <= principal * REDEMPTION_INTEREST_SHARE,
+      );
+    candidates.sort((a, b) => {
+      if (a.principal !== b.principal) return b.principal - a.principal;
+      return (started.get(a.deposit.id) ?? '') < (started.get(b.deposit.id) ?? '') ? -1 : 1;
+    });
     return candidates[0];
   };
 
@@ -233,13 +259,18 @@ export function trackDeposits(
       (row.tags.includes('deposit-return') || row.tags.includes('deposit-closure')) &&
       row.amount > 0
     ) {
-      const deposit = row.deposit
+      const exact = row.deposit
         ? depositFor(row, row.deposit)
-        : (oldestWithPrincipal(row, row.amount) ?? depositFor(row, undefined));
-      takeOut(deposit, row, row.amount);
-      link(row, deposit, false, row.amount, [
-        { kind: 'transfer', category: '', amount: row.amount },
-      ]);
+        : oldestWithPrincipal(row, row.amount);
+      const close = exact ? undefined : closestBelow(row);
+      const deposit = exact ?? close?.deposit ?? depositFor(row, undefined);
+      const principal = close?.principal ?? row.amount;
+      takeOut(deposit, row, principal);
+      const parts: Part[] = [{ kind: 'transfer', category: '', amount: principal }];
+      if (row.amount > principal) {
+        parts.push({ kind: 'income', category: 'Interest', amount: row.amount - principal });
+      }
+      link(row, deposit, false, principal, parts);
     }
   }
 

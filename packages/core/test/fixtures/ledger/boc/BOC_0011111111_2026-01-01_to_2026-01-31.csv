@@ -1,0 +1,21 @@
+BANK OF CEYLON - ACCOUNT STATEMENT
+
+Account Number,0011111111
+Account Holder,MR A PERERA
+Address,"1 SAMPLE ROAD,COLOMBO"
+Branch,Sample Branch
+Branch Contact,011 0000000
+Currency,LKR
+Statement Period,2026-01-01 to 2026-01-31
+Generated On,01-02-2026 09:00 AM
+
+TRANSACTION SUMMARY
+Total Credits,"150,025.00",2 - item(s)
+Total Debits,"43,525.00",2 - item(s)
+
+TRANSACTION DETAILS
+Date,Description,Transaction Type,Credit Amount,Debit Amount,Running Balance,Cheque Number,Branch ID
+2026-01-31,INTEREST PAY SYS-GEN,Credit,25.00,,"306,500.00",000000000,761
+2026-01-25,SLIPS IN - ACME PVT LTD,Credit,"150,000.00",,"306,475.00",000000000,761
+2026-01-10,CEFT-OWN TRANSFER,Debit,,"40,025.00","156,475.00",000000000,1
+2026-01-05,POS       GROCER ONE - COLOMBO,Debit,,"3,500.00","196,500.00",000000000,777

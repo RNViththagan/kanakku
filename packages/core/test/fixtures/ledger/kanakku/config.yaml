@@ -1,0 +1,55 @@
+version: 1
+homeCurrency: LKR
+locale: en-US
+folders:
+  - path: boc
+    bank: boc
+  - path: combank
+    bank: combank
+  - path: hnb
+    bank: hnb
+accounts:
+  - id: boc-main
+    name: BOC Main
+    bank: boc
+    type: savings
+    currency: LKR
+    number: "0011111111"
+  - id: cb-savings
+    name: ComBank Savings
+    bank: combank
+    type: savings
+    currency: LKR
+    number: "0022222222"
+  - id: cb-card
+    name: ComBank Card
+    bank: combank
+    type: credit-card
+    currency: LKR
+    card:
+      statementDay: 5
+      dueDay: 26
+  - id: hnb-lkr
+    name: HNB LKR
+    bank: hnb
+    type: savings
+    currency: LKR
+    number: "33333XXXXX33"
+  - id: hnb-usd
+    name: HNB USD
+    bank: hnb
+    type: savings
+    currency: USD
+    number: "44444XXXXX44"
+you:
+  names: ["A PERERA"]
+rates:
+  source: manual
+  manual:
+    USD: 300
+rules:
+  - match: "SLIPS IN - ACME"
+    kind: income
+    category: Salary
+  - match: "Rent"
+    category: Rent

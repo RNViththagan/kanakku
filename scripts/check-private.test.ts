@@ -31,6 +31,11 @@ describe('findViolations', () => {
     expect(findViolations(allowed, [])).toEqual([]);
   });
 
+  it('allows config.yaml in fixtures', () => {
+    const files = [{ path: 'packages/core/test/fixtures/ledger/kanakku/config.yaml', content: '' }];
+    expect(findViolations(files, [])).toEqual([]);
+  });
+
   it('blocks private strings without printing them', () => {
     const result = findViolations([{ path: 'notes.md', content: 'x\n0099\n' }], ['0099']);
     expect(result).toEqual([{ path: 'notes.md', line: 2, reason: 'contains a private string' }]);

@@ -31,7 +31,7 @@ export function findViolations(files, privateStrings) {
     if (STATEMENT_EXTENSIONS.some((ext) => lower.endsWith(ext)) && !isSampleDataPath(path)) {
       violations.push({ path, reason: 'statement file outside fixtures' });
     }
-    if (lower.split('/').at(-1) === 'config.yaml' && !path.startsWith('demo/')) {
+    if (lower.split('/').at(-1) === 'config.yaml' && !isSampleDataPath(path)) {
       violations.push({ path, reason: 'personal config file' });
     }
     if (privateStrings.length === 0) continue;

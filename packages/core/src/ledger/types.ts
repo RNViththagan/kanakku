@@ -33,3 +33,19 @@ export interface ChainBreak {
   before: { date: IsoDate; file: string; balance: number };
   after: { date: IsoDate; file: string; amount: number; balance: number };
 }
+
+export interface Transfer {
+  id: string;
+  out?: string;
+  in?: string;
+  from: string;
+  to: string;
+  date: IsoDate;
+  amountOut: number;
+  currencyOut: CurrencyCode;
+  amountIn?: number;
+  currencyIn?: CurrencyCode;
+  fee: number;
+  rule: 'reference' | 'exact' | 'fee' | 'answer' | 'wording' | 'deposit' | 'counterparty';
+  status: 'matched' | 'confirmed' | 'one-sided';
+}

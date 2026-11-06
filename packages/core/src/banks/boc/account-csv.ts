@@ -16,7 +16,8 @@ function firstLine(text: string): string {
 function readHeader(cells: string[], statement: ParsedStatement): void {
   const key = cells[0]?.trim() ?? '';
   const value = cells[1]?.trim() ?? '';
-  const checks = (statement.checks ??= {});
+  statement.checks ??= {};
+  const checks = statement.checks;
   if (key === 'Account Number') statement.account.number = value;
   if (key === 'Currency') statement.account.currency = value;
   if (key === 'Generated On') {

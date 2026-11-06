@@ -194,6 +194,8 @@ In this order:
 5. The only account in config with the same bank and a type the format can hold.
 6. Otherwise ask in Needs you. When the number is new, offer to add the account with bank, number, currency and type filled in.
 
+A file that states an account number (full or masked) that fits no account never reaches rules 3 and 5. Opening a second account at the same bank must not pour its rows into the first. It goes to rule 6, unless you already answered for that file.
+
 ### 9.4 Put rows in time order
 
 Banks list rows newest first or oldest first, and order same-day rows in different ways. When a format has a running balance, use it. For each pair of neighbouring rows, check which direction makes `balance = previous balance + amount` hold, and take the majority. Then, inside any day where the chain still breaks, try the orders of that day's rows and keep one that holds. Without a running balance, sort by date and keep file order within a day.
@@ -212,7 +214,7 @@ After merging, order the rows (9.4) and check the balance chain. A break means r
 
 ### 9.6 Coverage and missing periods
 
-Each file covers a period. Use the period stated in the file. Otherwise use the dates in Kanakku's tidy file name. Otherwise use the first to the last row date, or to the closing-balance date when the file states one.
+Each file covers a period. Use the period stated in the file. Otherwise use the dates in Kanakku's tidy file name. Otherwise use the period the plug-in infers (a whole month for HNB). Otherwise use the first to the last row date, or to the closing-balance date when the file states one. When the file says when it was generated, and that day is at most 7 days after its last row, the period runs to the generation day. A file downloaded months after its range never claims those months.
 
 For each account:
 
@@ -268,12 +270,17 @@ A one-sided transfer keeps the row out of income and spending. It never changes 
 
 ### 9.10 Credit cards
 
-- Charges are spending on the purchase date. Credits are payments when matched to money leaving a bank account or worded as a payment. Other credits are refunds, which are negative spending.
-- Owed on a day = opening owed (config, default 0 at the first statement) + charges − credits up to that day.
-- **Billing cycles** come from the card's statement day S and due day D. A cycle runs from day S+1 of one month to day S of the next. The statement date is day S. The due date is day D of the statement's month when D > S, otherwise day D of the next month. Short months use their last day.
-- For each cycle: charges, credits, amount billed (owed on the statement date), amount paid by the due date, and status: paid, part paid, unpaid or overdue.
+- Charges are spending on the purchase date. Credits are payments when matched to money leaving a bank account or worded as a payment. Other credits are refunds: negative spending in Refunds. Interest the card charges is spending in Fees.
+- Owed on a day = opening owed (config, default 0 at the first statement) + charges − credits up to that day. In net worth a card counts as minus what is owed.
+- **Billing cycles** come from the card's statement day S and due day D. The statement date is day S of each month, or the month's last day when the month is shorter. A cycle runs from the day after the previous statement date to the statement date. The due date is day D (clamped the same way) of the statement's month when D > S, otherwise of the next month.
+- For each cycle: charges, credits, amount billed (owed on the statement date), amount paid (card credits after the statement date, up to the next statement date) and status:
+  - open until the statement date;
+  - paid when nothing is owed or the payments cover the bill, even if late;
+  - overdue after the due date while payments are short;
+  - part paid when some is paid and the due date has not passed;
+  - unpaid otherwise.
 - Needs you shows the next bill 7 days before it is due, and any overdue bill.
-- Card coverage is by cycle. A cycle with no file is missing. A file for a cycle that has not closed is "partial".
+- Card coverage is by cycle. A cycle with no file is missing. A file generated before its cycle closed is "partial".
 
 ### 9.11 Currencies and valuation
 
@@ -283,6 +290,7 @@ A one-sided transfer keeps the row out of income and spending. It never changes 
 - **Income and spending** in a foreign currency are valued at the rate of their own day.
 - **Rate for a day,** in this order: the selected source's rate for that day; the nearest earlier stored rate; the rate of your nearest conversion in that currency; your manual rate; otherwise "no rate", which shows the value as unknown and adds a Needs you item.
 - Rates are the bank's **buying** rate, which is what the bank pays for your foreign money.
+- Rates are kept as whole numbers of millionths, and valuation multiplies with exact integers, so no rounding error creeps in.
 - **Rate sources are plug-ins:**
 
 ```ts
@@ -436,8 +444,8 @@ rates:
   options: {}
   manual: { USD: 330.00 }
 categories:
-  income: [Salary, Interest, Refunds, Other income]
-  spending: [Groceries, Food and dining, Shopping, Transport, Bills, Rent, Health, Education, Entertainment, Travel, Gifts, To people, Cash, Fees, Tax, Uncategorised]
+  income: [Salary, Interest, Other income]
+  spending: [Groceries, Food and dining, Shopping, Transport, Bills, Rent, Health, Education, Entertainment, Travel, Gifts, To people, Cash, Fees, Tax, Refunds, Uncategorised]
 rules:
   - match: "SALARY"
     kind: income
@@ -615,7 +623,8 @@ P.O. Box 856 Colombo 1, Sri Lanka.",,,,,,,,,,,
 - Detect: a `Transaction History` title row, a header row from `Transaction Date` to `Running Balance`, and the bank's name in the footer.
 - No account number inside. The bank's download name, `transaction_history_<account>_<yyyymmdd>.csv`, has it.
 - Rows are newest first. Dates are `DD/MM/YYYY`. Descriptions have three parts split by ` / `.
-- The footer's "Generated at" uses `M/D/YY h:mm AM`.
+- The table ends at the footer row with "Generated at", which uses `M/D/YY h:mm AM`. Both ComBank formats have this footer.
+- Transfer fees come as separate rows (`IB CEFT CHGS`).
 
 Format `combank-card-csv`, for credit cards:
 
@@ -640,7 +649,8 @@ Date, Ref.No, Particulars, Debits, Credits, Balance
 - Detect: the header line and a last row `BALANCE AS AT DATE`.
 - Rows are oldest first. Dates are `DD/MM/YYYY`. Numbers are plain. The file often has no final newline.
 - The last row gives the end date and the closing balance.
-- No bank name, currency or full account number inside. Interest rows carry the masked number (`12345XXXXX67:Int.Pd:...`). The currency comes from the matched account.
+- No bank name, currency or full account number inside. Interest rows carry the masked number (`12345XXXXX67:Int.Pd:...`). The currency comes from the matched account. A month without an interest row has no masked number, so its file is assigned by its name or by asking.
+- Header cells carry leading spaces; match them trimmed. Some rows have an empty description.
 - One file per month is usual.
 - Both sides of a transfer between two HNB accounts carry the same `Ref.No`, also across currencies.
 - Seen wording: `<masked>:Int.Pd:` (interest), `Finacle Alert Charges`, `MB/IB FEE`, `Bi Annual Fee` and `COUNTER WITHDRAWAL CHGS` (fees), `Dr. Tran for funding A/c <number>` (deposit placement), `<number> : Closure Proceeds` (deposit closure, principal plus interest), `MB:` (transfer hint).

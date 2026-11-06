@@ -47,16 +47,19 @@ export function normalizeAmount(text: string): string | undefined {
   return negative ? `-${value}` : value;
 }
 
-export function decimalToMinor(decimal: string, currency: CurrencyCode): number {
+export function decimalToScaled(decimal: string, places: number): number {
   const match = /^(-)?(\d+)(?:\.(\d+))?$/.exec(decimal);
   if (!match) throw new Error(`Not a decimal amount: ${decimal}`);
   const [, sign, whole = '', fraction = ''] = match;
-  const places = minorUnits(currency);
   const kept = fraction.padEnd(places, '0').slice(0, places);
   let value = Number(whole) * 10 ** places + Number(kept === '' ? '0' : kept);
   if ((fraction[places] ?? '0') >= '5') value += 1;
   if (!Number.isSafeInteger(value)) throw new Error(`Amount too large: ${decimal}`);
   return sign && value !== 0 ? -value : value;
+}
+
+export function decimalToMinor(decimal: string, currency: CurrencyCode): number {
+  return decimalToScaled(decimal, minorUnits(currency));
 }
 
 export function minorToDecimal(minor: number, currency: CurrencyCode): string {

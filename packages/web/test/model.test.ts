@@ -5,6 +5,7 @@ import {
   accountsByBank,
   latestMonth,
   linkRange,
+  monthSpan,
   needsByType,
   overviewStats,
   rangeEndingAt,
@@ -237,5 +238,14 @@ describe('linkRange', () => {
     expect(linkRange({ from: '2026-02-30' }, range)).toEqual(range);
     expect(linkRange({ from: '2026-03-01', to: '2026-02-01' }, range)).toEqual(range);
     expect(linkRange(undefined, range)).toEqual(range);
+  });
+});
+
+describe('monthSpan', () => {
+  it('covers the month, trimmed to the range', () => {
+    const range = { from: '2025-12-15', to: '2026-02-20' };
+    expect(monthSpan('2025-12', range)).toEqual({ from: '2025-12-15', to: '2025-12-31' });
+    expect(monthSpan('2026-01', range)).toEqual({ from: '2026-01-01', to: '2026-01-31' });
+    expect(monthSpan('2026-02', range)).toEqual({ from: '2026-02-01', to: '2026-02-20' });
   });
 });

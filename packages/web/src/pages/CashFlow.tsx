@@ -15,6 +15,8 @@ import { useMemo } from 'react';
 import { explore, FlowExplorer } from '../FlowExplorer';
 import { categoryTotals, type FlowOrigin, moneyFlow } from '../flow';
 import { monthLabel, toMajor } from '../format';
+import { monthSpan } from '../model';
+import { hrefFor } from '../routes';
 import { runningTotals } from '../series';
 import { useStoredChoice } from '../stored';
 import { Amount, Empty, MoneyArea, MoneyBars, Section, Title, useMoneyColors } from '../ui';
@@ -85,6 +87,17 @@ export function CashFlow({ ledger, range, rangeLabel, route }: PageProps) {
           })),
     [months, view],
   );
+  const monthLink = (month: string) => {
+    const span = monthSpan(month, range);
+    return hrefFor({
+      page: 'transactions',
+      query: view === 'cumulative' ? { from: range.from, to: span.to } : { ...span },
+    });
+  };
+  const openMonth = (index: number) => {
+    const row = rows[index];
+    if (row) window.location.hash = monthLink(row.month);
+  };
   const points = rows.map((row) => ({
     label: monthLabel(row.month, locale),
     income: toMajor(row.income, home),
@@ -134,6 +147,7 @@ export function CashFlow({ ledger, range, rangeLabel, route }: PageProps) {
             locale={locale}
             colors={[colors.income, colors.outgoing]}
             height={280}
+            onSelect={openMonth}
           />
         ) : (
           <MoneyBars
@@ -142,6 +156,7 @@ export function CashFlow({ ledger, range, rangeLabel, route }: PageProps) {
             currency={home}
             locale={locale}
             colors={[colors.income, colors.outgoing]}
+            onSelect={openMonth}
           />
         )}
         <Table size="small" sx={{ mt: 2 }}>
@@ -156,7 +171,11 @@ export function CashFlow({ ledger, range, rangeLabel, route }: PageProps) {
           <TableBody>
             {[...rows].reverse().map((row) => (
               <TableRow key={row.month}>
-                <TableCell>{monthLabel(row.month, locale)}</TableCell>
+                <TableCell>
+                  <Link href={monthLink(row.month)} underline="hover">
+                    {monthLabel(row.month, locale)}
+                  </Link>
+                </TableCell>
                 <TableCell align="right">
                   <Amount minor={row.income} currency={home} locale={locale} />
                 </TableCell>

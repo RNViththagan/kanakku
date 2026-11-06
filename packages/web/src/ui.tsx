@@ -173,6 +173,7 @@ export function MoneyArea({
   locale,
   height = 260,
   colors,
+  onSelect,
 }: {
   data: ChartPoint[];
   series: Array<{ key: string; name: string }>;
@@ -180,25 +181,39 @@ export function MoneyArea({
   locale: string;
   height?: number;
   colors?: string[];
+  onSelect?: (index: number) => void;
 }) {
   return (
-    <AreaChart
-      data={data}
-      xAxisDataKey="label"
-      areas={series.map((item) => ({
-        dataKey: item.key,
-        name: item.name,
-        type: 'monotone',
-        ...(series.length > 1 ? { fillOpacity: 0.3 } : {}),
-      }))}
-      height={height}
-      yAxis={{ show: false }}
-      legend={{ show: series.length > 1 }}
-      tooltip={moneyTooltip(currency, locale)}
-      colors={colors}
+    <Box
+      sx={onSelect ? { '& .recharts-surface': { cursor: 'pointer' } } : undefined}
+      onClick={
+        onSelect
+          ? (event) => {
+              const shown = event.currentTarget.querySelector('.recharts-tooltip-label');
+              const index = data.findIndex((point) => point.label === shown?.textContent);
+              if (index >= 0) onSelect(index);
+            }
+          : undefined
+      }
     >
-      {valueAxis(locale)}
-    </AreaChart>
+      <AreaChart
+        data={data}
+        xAxisDataKey="label"
+        areas={series.map((item) => ({
+          dataKey: item.key,
+          name: item.name,
+          type: 'monotone',
+          ...(series.length > 1 ? { fillOpacity: 0.3 } : {}),
+        }))}
+        height={height}
+        yAxis={{ show: false }}
+        legend={{ show: series.length > 1 }}
+        tooltip={moneyTooltip(currency, locale)}
+        colors={colors}
+      >
+        {valueAxis(locale)}
+      </AreaChart>
+    </Box>
   );
 }
 
@@ -210,6 +225,7 @@ export function MoneyBars({
   stacked = false,
   height = 280,
   colors,
+  onSelect,
 }: {
   data: ChartPoint[];
   series: Array<{ key: string; name: string }>;
@@ -218,23 +234,27 @@ export function MoneyBars({
   stacked?: boolean;
   height?: number;
   colors?: string[];
+  onSelect?: (index: number) => void;
 }) {
   return (
-    <BarChart
-      data={data}
-      xAxisDataKey="label"
-      bars={series.map((item) => ({
-        dataKey: item.key,
-        name: item.name,
-        ...(stacked ? { stackId: 'total' } : {}),
-      }))}
-      height={height}
-      yAxis={{ show: false }}
-      legend={{ show: series.length > 1 }}
-      tooltip={moneyTooltip(currency, locale)}
-      colors={colors}
-    >
-      {valueAxis(locale)}
-    </BarChart>
+    <Box sx={onSelect ? { '& .recharts-bar-rectangle': { cursor: 'pointer' } } : undefined}>
+      <BarChart
+        data={data}
+        xAxisDataKey="label"
+        bars={series.map((item) => ({
+          dataKey: item.key,
+          name: item.name,
+          ...(stacked ? { stackId: 'total' } : {}),
+        }))}
+        height={height}
+        yAxis={{ show: false }}
+        legend={{ show: series.length > 1 }}
+        tooltip={moneyTooltip(currency, locale)}
+        colors={colors}
+        onClick={onSelect ? (_data: unknown, index: number) => onSelect(index) : undefined}
+      >
+        {valueAxis(locale)}
+      </BarChart>
+    </Box>
   );
 }

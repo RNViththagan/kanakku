@@ -7,6 +7,7 @@ import {
   type CurrencyCode,
   cashFlowByMonth,
   type DateRange,
+  endOfMonth,
   findBank,
   type IsoDate,
   type Kind,
@@ -173,6 +174,15 @@ export function rangeFor(
       return first ? { from: first, to: today } : rangeEndingAt(today, 1);
     }
   }
+}
+
+export function monthSpan(month: string, range: DateRange): DateRange {
+  const first = `${month}-01`;
+  const last = endOfMonth(first);
+  return {
+    from: [first, range.from].sort()[1] ?? first,
+    to: [last, range.to].sort()[0] ?? last,
+  };
 }
 
 export function linkRange(query: Record<string, string> | undefined, range: DateRange): DateRange {

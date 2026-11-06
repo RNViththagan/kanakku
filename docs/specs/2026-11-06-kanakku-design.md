@@ -105,7 +105,7 @@ Every transaction has one **kind**, which decides how it is counted:
 
 A **category** adds detail inside a kind: Salary, Interest, Groceries, Fees, Tax, Cash and so on. Categories are a list you can edit. Kanakku starts with a short default list.
 
-The money lost in a transfer (40,025 sent, 40,000 received) is spending in the Fees category.
+One row can hold more than one kind. A transfer that lost a fee (40,025 sent, 40,000 received) or a deposit closure that pays principal and interest is one transaction with **parts**. Each part has a kind, a category and an amount, and the parts add up to the row. The 40,025 row has a transfer part of 40,000 and a spending part of 25 in Fees. Views add up parts. A transaction's own kind is its main part, used for display. An answer that sets a category on a split row changes its non-transfer part.
 
 ### 7.3 Account types
 
@@ -202,13 +202,13 @@ Banks list rows newest first or oldest first, and order same-day rows in differe
 
 Files for one account often overlap. For each account:
 
-- Give every row a key: date, amount and running balance when there is a balance; otherwise date, amount and reference; otherwise date, amount and description with spaces and case normalised.
+- Give every row a key: date, amount, reference (when the row has one) and description with spaces and case normalised. The running balance is not part of the key, so one disagreement between files cannot make every later row look new.
 - Count how often each key appears in each file. Keep the largest count across files, not the sum. Two identical purchases on one day stay two. One purchase seen in two files becomes one.
+- Each kept row takes its running balance from the newest file that has it: the latest generation date, else the latest period end.
 - Each kept transaction lists every file and line it was seen in.
 - The transaction id is a hash of account id, key and occurrence number. It does not change when files are added, renamed or removed, so saved answers keep working.
-- When two files disagree inside their overlap, prefer the file generated later for that stretch and record an issue.
 
-After merging, walk the account's rows in order and check the balance chain. A break means rows are missing or a file is wrong. It becomes an issue with the dates on both sides.
+After merging, order the rows (9.4) and check the balance chain. A break means rows are missing, or two files disagree inside their overlap (a row one has and the other lacks). Kanakku does not choose between files. The break goes to Needs you with the dates on both sides and the files involved.
 
 ### 9.6 Coverage and missing periods
 
@@ -235,7 +235,7 @@ Each step only settles what the earlier steps left open:
 
 An outgoing row in account A and an incoming row in account B match when all of these hold:
 
-- A and B are different accounts, both in config.
+- A and B are different accounts, both yours: in config, or deposits Kanakku discovered (9.9).
 - Neither row is already in a transfer.
 - The dates are at most `transfers.windowDays` apart (default 3).
 - The amounts fit:
@@ -252,13 +252,17 @@ Rows with a transfer hint but no match become one of:
 
 Every automatic match can be undone, and any two rows can be paired by hand.
 
+A one-sided transfer keeps the row out of income and spending. It never changes the balance of an account that has statements, because statements are the source of that balance. Only deposits get their balance from transfers (9.9).
+
 ### 9.9 Fixed deposits
 
 - Wording rules recognise placements, principal returns, interest and closure proceeds, with the deposit number when the wording has one.
 - A deposit number not in config becomes a "discovered" fixed-deposit account. You can name it and add term, rate and maturity.
 - A placement is a transfer from the paying account to the deposit. A principal return is a transfer back. Interest is income in Interest.
 - Closure proceeds that mix principal and interest are split using the placed principal. When the placement is older than your statements, Needs you asks for the principal. Until you answer, the whole amount counts as principal.
-- A return that names no deposit goes to an open deposit at the same bank with the same principal. Otherwise it goes to that bank's pool of unnamed deposits.
+- A return that names no deposit goes to an open deposit at the same bank with the same principal. Otherwise it goes to that bank's pool of unnamed deposits, which is a discovered deposit account too.
+- **Statements win.** A deposit's balance is built from its placements and returns. A config deposit with `principal` and `start` counts from `start` only when no placement for it appears in statements, and then Kanakku does not ask for its principal. When a placement appears and differs from the config principal, the statement wins and an issue is recorded.
+- **Never below zero.** A return larger than what Kanakku saw placed means the deposit is older than your statements. The excess counts as money from before your statements, the balance stays at zero, and Needs you asks you to add the deposit to config.
 - Net worth counts principal still placed. Interest counts when paid, not as it builds up.
 - With a maturity date, Needs you reminds you 7 days before.
 
@@ -288,8 +292,8 @@ interface RateSource {
   quoteCurrency: CurrencyCode;        // rates are in this currency
   currencies: CurrencyCode[] | "any";
   options?: OptionSpec[];             // for example, which bank
-  url(options: Record<string, string>): string;
-  parse(body: string, options: Record<string, string>): RateQuote[];  // pure
+  requests(options: Record<string, string>): string[];               // URLs to fetch
+  parse(bodies: string[], options: Record<string, string>): RateQuote[];  // pure
 }
 ```
 
@@ -314,6 +318,8 @@ Answers you give in the app are saved in `kanakku/decisions.yaml`. Each answer h
 | `dismiss` | Hide this Needs you item. |
 
 Answers that point at transactions no longer present are kept and listed in Settings as unused. Removing an answer brings back the automatic result.
+
+"Mine" on a counterparty opens the add-account form, filled in from the description, and saves the account to config. Rows naming it become one-sided transfers to it. Until you add its statements it has no known balance, so it adds nothing to net worth. "Not mine" stops the question and the rows stay income or spending.
 
 Accounts, rules, card settings and deposits belong in config, not in answers.
 
@@ -545,6 +551,11 @@ Decided without discussion. They can change without changing what gets built.
 - Matching window 3 days. Reminders 7 days ahead. "Behind" after 7 days.
 - Deposits valued at principal. Interest counts when paid.
 - English only, with each page's text kept together so translation can come later.
+- Split rows are one transaction with parts, not extra transactions (7.2).
+- The merge key leaves out the running balance; disagreeing files go to Needs you instead of one file winning (9.5).
+- Statements win over config for deposits, and a deposit never goes below zero (9.9).
+- One-sided transfers never change the balance of an account with statements (9.8).
+- "Mine" adds the counterparty as a config account (9.12).
 
 ## 19. Later
 

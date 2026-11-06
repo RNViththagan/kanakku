@@ -32,6 +32,7 @@ import { RANGE_PRESETS, type RangePreset, rangeFor } from './model';
 import { PageView } from './PageView';
 import { PAGE_TITLES, PAGES } from './pages';
 import { hrefFor, type PageId, parseHash, type Route } from './routes';
+import { useStoredChoice } from './stored';
 
 const RANGE_KEY = 'kanakku-range';
 
@@ -56,26 +57,6 @@ function useRoute(): Route {
     return () => window.removeEventListener('hashchange', update);
   }, []);
   return route;
-}
-
-function useRangePreset(): [RangePreset, (preset: RangePreset) => void] {
-  const [preset, setPreset] = useState<RangePreset>(() => {
-    try {
-      const saved = localStorage.getItem(RANGE_KEY);
-      return RANGE_PRESETS.some((option) => option.id === saved) ? (saved as RangePreset) : '12m';
-    } catch {
-      return '12m';
-    }
-  });
-  const choose = (next: RangePreset) => {
-    setPreset(next);
-    try {
-      localStorage.setItem(RANGE_KEY, next);
-    } catch {
-      return;
-    }
-  };
-  return [preset, choose];
 }
 
 function go(route: Route): void {
@@ -111,7 +92,11 @@ function StatusBanner({ status }: { status: Status }) {
 
 export function App() {
   const route = useRoute();
-  const [preset, setPreset] = useRangePreset();
+  const [preset, setPreset] = useStoredChoice<RangePreset>(
+    RANGE_KEY,
+    RANGE_PRESETS.map((option) => option.id),
+    '12m',
+  );
   const { ledger, status, tidy, loading, error } = useLedger();
   const needs = ledger?.needs.length ?? 0;
   const foreign = ledger

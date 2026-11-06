@@ -1,5 +1,6 @@
 import {
   balanceOn,
+  type CashFlowMonth,
   type CurrencyCode,
   cashFlowByMonth,
   type DateRange,
@@ -56,6 +57,22 @@ export function spendingTrend(ledger: Ledger, range: DateRange, top = 5): Spendi
     return { month: month.month, values };
   });
   return { categories, months };
+}
+
+export interface RunningTotal {
+  month: string;
+  income: number;
+  outgoing: number;
+}
+
+export function runningTotals(months: CashFlowMonth[]): RunningTotal[] {
+  let income = 0;
+  let outgoing = 0;
+  return months.map((month) => {
+    income += month.income;
+    outgoing += month.spending;
+    return { month: month.month, income, outgoing };
+  });
 }
 
 export interface BalancePoint {

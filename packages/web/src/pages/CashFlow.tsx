@@ -1,11 +1,31 @@
 import { cashFlowByMonth } from '@kanakku/core';
-import { Grid, Table, TableBody, TableCell, TableHead, TableRow } from '@wso2/oxygen-ui';
+import {
+  Grid,
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableRow,
+  ToggleButton,
+  ToggleButtonGroup,
+} from '@wso2/oxygen-ui';
 import { useMemo } from 'react';
 import { FlowChart } from '../FlowChart';
 import { categoryTotals, moneyFlow } from '../flow';
 import { monthLabel, toMajor } from '../format';
-import { Amount, Empty, MoneyBars, Section, Title, useMoneyColors } from '../ui';
+import { runningTotals } from '../series';
+import { useStoredChoice } from '../stored';
+import { Amount, Empty, MoneyArea, MoneyBars, Section, Title, useMoneyColors } from '../ui';
 import type { PageProps } from './types';
+
+const VIEWS = ['monthly', 'cumulative'] as const;
+type View = (typeof VIEWS)[number];
+const VIEW_KEY = 'kanakku-cash-flow-view';
+
+const SERIES = [
+  { key: 'income', name: 'Income' },
+  { key: 'outgoing', name: 'Outgoing' },
+];
 
 function Split({
   title,
@@ -45,6 +65,23 @@ export function CashFlow({ ledger, range, rangeLabel }: PageProps) {
   const colors = useMoneyColors();
   const months = useMemo(() => cashFlowByMonth(ledger, range), [ledger, range]);
   const flow = useMemo(() => moneyFlow(months), [months]);
+  const [view, setView] = useStoredChoice<View>(VIEW_KEY, VIEWS, 'monthly');
+  const rows = useMemo(
+    () =>
+      view === 'cumulative'
+        ? runningTotals(months)
+        : months.map((month) => ({
+            month: month.month,
+            income: month.income,
+            outgoing: month.spending,
+          })),
+    [months, view],
+  );
+  const points = rows.map((row) => ({
+    label: monthLabel(row.month, locale),
+    income: toMajor(row.income, home),
+    outgoing: toMajor(row.outgoing, home),
+  }));
   const income = useMemo(() => categoryTotals(months.map((month) => month.incomeBy)), [months]);
   const outgoing = useMemo(() => categoryTotals(months.map((month) => month.spendingBy)), [months]);
   const unvalued = [...new Set(months.flatMap((month) => month.unvalued))];
@@ -58,21 +95,42 @@ export function CashFlow({ ledger, range, rangeLabel }: PageProps) {
       <Section title="Money flow">
         <FlowChart flow={flow} currency={home} locale={locale} />
       </Section>
-      <Section title="Income and outgoing by month">
-        <MoneyBars
-          data={months.map((month) => ({
-            label: monthLabel(month.month, locale),
-            income: toMajor(month.income, home),
-            outgoing: toMajor(month.spending, home),
-          }))}
-          series={[
-            { key: 'income', name: 'Income' },
-            { key: 'outgoing', name: 'Outgoing' },
-          ]}
-          currency={home}
-          locale={locale}
-          colors={[colors.income, colors.outgoing]}
-        />
+      <Section
+        title="Income and outgoing by month"
+        action={
+          <ToggleButtonGroup
+            size="small"
+            exclusive
+            value={view}
+            onChange={(_event, next: View | null) => {
+              if (next) setView(next);
+            }}
+            aria-label="Show"
+            sx={{ '& .MuiToggleButton-root': { textTransform: 'none', px: 1.5 } }}
+          >
+            <ToggleButton value="monthly">Monthly</ToggleButton>
+            <ToggleButton value="cumulative">Cumulative</ToggleButton>
+          </ToggleButtonGroup>
+        }
+      >
+        {view === 'cumulative' ? (
+          <MoneyArea
+            data={points}
+            series={SERIES}
+            currency={home}
+            locale={locale}
+            colors={[colors.income, colors.outgoing]}
+            height={280}
+          />
+        ) : (
+          <MoneyBars
+            data={points}
+            series={SERIES}
+            currency={home}
+            locale={locale}
+            colors={[colors.income, colors.outgoing]}
+          />
+        )}
         <Table size="small" sx={{ mt: 2 }}>
           <TableHead>
             <TableRow>
@@ -83,17 +141,17 @@ export function CashFlow({ ledger, range, rangeLabel }: PageProps) {
             </TableRow>
           </TableHead>
           <TableBody>
-            {[...months].reverse().map((month) => (
-              <TableRow key={month.month}>
-                <TableCell>{monthLabel(month.month, locale)}</TableCell>
+            {[...rows].reverse().map((row) => (
+              <TableRow key={row.month}>
+                <TableCell>{monthLabel(row.month, locale)}</TableCell>
                 <TableCell align="right">
-                  <Amount minor={month.income} currency={home} locale={locale} />
+                  <Amount minor={row.income} currency={home} locale={locale} />
                 </TableCell>
                 <TableCell align="right">
-                  <Amount minor={month.spending} currency={home} locale={locale} />
+                  <Amount minor={row.outgoing} currency={home} locale={locale} />
                 </TableCell>
                 <TableCell align="right">
-                  <Amount minor={month.net} currency={home} locale={locale} />
+                  <Amount minor={row.income - row.outgoing} currency={home} locale={locale} />
                 </TableCell>
               </TableRow>
             ))}

@@ -172,22 +172,30 @@ export function MoneyArea({
   currency,
   locale,
   height = 260,
+  colors,
 }: {
   data: ChartPoint[];
   series: Array<{ key: string; name: string }>;
   currency: CurrencyCode;
   locale: string;
   height?: number;
+  colors?: string[];
 }) {
   return (
     <AreaChart
       data={data}
       xAxisDataKey="label"
-      areas={series.map((item) => ({ dataKey: item.key, name: item.name, type: 'monotone' }))}
+      areas={series.map((item) => ({
+        dataKey: item.key,
+        name: item.name,
+        type: 'monotone',
+        ...(series.length > 1 ? { fillOpacity: 0.3 } : {}),
+      }))}
       height={height}
       yAxis={{ show: false }}
       legend={{ show: series.length > 1 }}
       tooltip={moneyTooltip(currency, locale)}
+      colors={colors}
     >
       {valueAxis(locale)}
     </AreaChart>

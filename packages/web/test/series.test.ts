@@ -1,6 +1,7 @@
+import { cashFlowByMonth } from '@kanakku/core';
 import { describe, expect, it } from 'vitest';
 import { loadWorld } from '../../core/test/helpers/world';
-import { balanceSeries, netWorthPoints, spendingTrend } from '../src/series';
+import { balanceSeries, netWorthPoints, runningTotals, spendingTrend } from '../src/series';
 
 const ledger = loadWorld();
 const range = { from: '2026-01-01', to: '2026-02-20' };
@@ -52,6 +53,17 @@ describe('balanceSeries', () => {
     expect(balanceSeries(ledger, 'cb-savings', { from: '2025-12-01', to: '2026-01-31' })).toEqual([
       { date: '2025-12-31', month: '2025-12' },
       { date: '2026-01-31', month: '2026-01', balance: 15000000 },
+    ]);
+  });
+});
+
+describe('runningTotals', () => {
+  it('adds up income and outgoing month by month', () => {
+    const months = cashFlowByMonth(ledger, { from: '2025-12-01', to: '2026-02-20' });
+    expect(runningTotals(months)).toEqual([
+      { month: '2025-12', income: 0, outgoing: 0 },
+      { month: '2026-01', income: 36014810, outgoing: 807550 },
+      { month: '2026-02', income: 36016060, outgoing: 5131050 },
     ]);
   });
 });

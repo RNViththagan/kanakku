@@ -1,7 +1,7 @@
 import type { CurrencyCode } from '@kanakku/core';
 import { Box, Stack, Tooltip, Typography } from '@wso2/oxygen-ui';
 import { useCallback, useMemo, useState } from 'react';
-import { type FlowItem, type FlowNode, flowLayout, type MoneyFlow, ribbonPath } from './flow';
+import { type FlowItem, flowLayout, type MoneyFlow, ribbonPath } from './flow';
 import { compact, money } from './format';
 import { Amount, Empty, type MoneyColors, useMoneyColors } from './ui';
 
@@ -9,6 +9,7 @@ interface FlowProps {
   flow: MoneyFlow;
   currency: CurrencyCode;
   locale: string;
+  linkTo?: (item: FlowItem) => string | undefined;
 }
 
 function totals(
@@ -18,82 +19,97 @@ function totals(
   return [
     { label: 'Income', value: flow.income, color: 'income' },
     { label: 'Outgoing', value: flow.outgoing, color: 'outgoing' },
-    { label: net < 0 ? 'From savings' : 'Saved', value: Math.abs(net), color: 'savings' },
+    { label: net < 0 ? 'Shortfall' : 'Saved', value: Math.abs(net), color: 'savings' },
   ];
 }
 
-function colorOf(node: FlowNode, colors: MoneyColors): string {
-  if (node.item.kind === 'savings') return colors.savings;
-  return node.side === 'in' ? colors.income : colors.outgoing;
+function through(flow: MoneyFlow): string {
+  return flow.income >= flow.outgoing ? 'Money in' : 'Money out';
+}
+
+function colorOf(item: FlowItem, colors: MoneyColors): string {
+  if (item.kind === 'savings') return colors.savings;
+  return item.side === 'in' ? colors.income : colors.outgoing;
 }
 
 function Tip({
   item,
-  total,
+  flow,
   currency,
   locale,
 }: {
   item: FlowItem;
-  total: number;
+  flow: MoneyFlow;
   currency: CurrencyCode;
   locale: string;
 }) {
   const share = new Intl.NumberFormat(locale, {
     style: 'percent',
     maximumFractionDigits: 1,
-  }).format(item.value / total);
+  }).format(item.value / flow.total);
   return (
     <Stack spacing={0.25}>
       <Typography variant="body2" sx={{ fontWeight: 600 }}>
         {money(item.value, currency, locale)}
       </Typography>
-      <Typography variant="caption">{`${item.label}, ${share} of the total`}</Typography>
+      <Typography variant="caption">
+        {`${item.label}, ${share} of ${through(flow).toLowerCase()}`}
+      </Typography>
       {item.folded.length > 0 ? (
-        <Typography variant="caption">{item.folded.join(', ')}</Typography>
+        <Typography variant="caption">
+          {item.folded.map((part) => part.label).join(', ')}
+        </Typography>
       ) : null}
     </Stack>
   );
 }
 
-export function FlowDiagram({ flow, width, currency, locale }: FlowProps & { width: number }) {
+export function FlowDiagram({
+  flow,
+  width,
+  currency,
+  locale,
+  linkTo,
+}: FlowProps & { width: number }) {
   const colors = useMoneyColors();
   const layout = useMemo(() => flowLayout(flow, width), [flow, width]);
   const { hub, nodeWidth } = layout;
   const middle = hub.x + nodeWidth / 2;
   return (
     <Box
+      component="figure"
+      aria-label={totals(flow)
+        .map((entry) => `${entry.label} ${money(entry.value, currency, locale)}.`)
+        .join(' ')}
       sx={(theme) => ({
+        m: 0,
         '& svg': { display: 'block' },
         '& .flow-name': { color: 'text.primary' },
         '& .flow-value': { color: 'text.secondary' },
         '& .flow-hub': { color: 'text.disabled' },
         '& .flow-ribbon': { fillOpacity: 0.35 },
-        '& .flow-item:hover .flow-ribbon': { fillOpacity: 0.6 },
+        '& .flow-item:hover .flow-ribbon, & .flow-item:focus-visible .flow-ribbon': {
+          fillOpacity: 0.6,
+        },
         ...theme.applyStyles('dark', {
           '& .flow-ribbon': { fillOpacity: 0.5 },
-          '& .flow-item:hover .flow-ribbon': { fillOpacity: 0.75 },
+          '& .flow-item:hover .flow-ribbon, & .flow-item:focus-visible .flow-ribbon': {
+            fillOpacity: 0.75,
+          },
         }),
       })}
     >
-      <svg
-        role="img"
-        aria-label={totals(flow)
-          .map((entry) => `${entry.label} ${money(entry.value, currency, locale)}.`)
-          .join(' ')}
-        width={layout.width}
-        height={layout.height}
-      >
-        {layout.nodes.map((node) => (
-          <Tooltip
-            key={node.item.key}
-            followCursor
-            title={<Tip item={node.item} total={flow.total} currency={currency} locale={locale} />}
-          >
-            <g className="flow-item">
+      {/* biome-ignore lint/a11y/noSvgWithoutTitle: the figure names it; a title would add a native tooltip over every flow */}
+      <svg width={layout.width} height={layout.height}>
+        {layout.nodes.map((node) => {
+          const href = linkTo?.(node.item);
+          const name = `${node.item.label}, ${money(node.item.value, currency, locale)}`;
+          const marks = (
+            <>
               <path
                 className="flow-ribbon"
                 d={ribbonPath(node.link)}
-                fill={colorOf(node, colors)}
+                fill={colorOf(node.item, colors)}
               />
               <rect
                 x={node.x}
@@ -101,7 +117,7 @@ export function FlowDiagram({ flow, width, currency, locale }: FlowProps & { wid
                 width={nodeWidth}
                 height={Math.max(node.height, 1)}
                 rx={2}
-                fill={colorOf(node, colors)}
+                fill={colorOf(node.item, colors)}
               />
               <text x={node.label.x} y={node.label.y} textAnchor={node.label.anchor}>
                 <tspan
@@ -123,9 +139,24 @@ export function FlowDiagram({ flow, width, currency, locale }: FlowProps & { wid
                   {compact(node.item.value, currency, locale)}
                 </tspan>
               </text>
-            </g>
-          </Tooltip>
-        ))}
+            </>
+          );
+          return (
+            <Tooltip
+              key={node.item.key}
+              followCursor
+              title={<Tip item={node.item} flow={flow} currency={currency} locale={locale} />}
+            >
+              {href ? (
+                <a className="flow-item" href={href} aria-label={name}>
+                  {marks}
+                </a>
+              ) : (
+                <g className="flow-item">{marks}</g>
+              )}
+            </Tooltip>
+          );
+        })}
         <rect
           className="flow-hub"
           x={hub.x}
@@ -137,7 +168,7 @@ export function FlowDiagram({ flow, width, currency, locale }: FlowProps & { wid
         />
         <text x={middle} y={hub.y} textAnchor="middle">
           <tspan className="flow-value" x={middle} dy={-24} fontSize={12} fill="currentColor">
-            Total
+            {through(flow)}
           </tspan>
           <tspan
             className="flow-name"
@@ -155,7 +186,7 @@ export function FlowDiagram({ flow, width, currency, locale }: FlowProps & { wid
   );
 }
 
-export function FlowChart({ flow, currency, locale }: FlowProps) {
+export function FlowChart({ flow, currency, locale, linkTo }: FlowProps) {
   const colors = useMoneyColors();
   const [width, setWidth] = useState(0);
   const measure = useCallback((node: HTMLDivElement | null) => {
@@ -191,7 +222,13 @@ export function FlowChart({ flow, currency, locale }: FlowProps) {
       </Stack>
       <Box ref={measure} sx={{ overflowX: 'auto' }}>
         {width > 0 ? (
-          <FlowDiagram flow={flow} width={width} currency={currency} locale={locale} />
+          <FlowDiagram
+            flow={flow}
+            width={width}
+            currency={currency}
+            locale={locale}
+            linkTo={linkTo}
+          />
         ) : null}
       </Box>
     </>

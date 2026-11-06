@@ -30,11 +30,11 @@ describe('moneyFlow', () => {
     expect(flow.outgoing).toBe(5131050);
   });
 
-  it('draws the shortfall from savings when more went out than came in', () => {
+  it('shows the shortfall when more went out than came in', () => {
     const flow = moneyFlow([month({ Salary: 1000 }, { Rent: 600 }), month({}, { Rent: 900 })]);
     expect(pick(flow.sources)).toEqual([
       ['Salary', 1000],
-      ['From savings', 500],
+      ['Shortfall', 500],
     ]);
     expect(pick(flow.uses)).toEqual([['Rent', 1500]]);
     expect(flow.total).toBe(1500);
@@ -51,19 +51,35 @@ describe('moneyFlow', () => {
     ]);
     expect(pick(flow.uses)).toEqual([
       ['Groceries', 1000],
-      ['Bonus', 200],
+      ['Bonus returned', 200],
       ['Saved', 1100],
     ]);
     expect(flow.income).toBe(1800);
     expect(flow.outgoing).toBe(700);
   });
 
-  it('joins a category that goes out as both income and spending', () => {
+  it('names the refunds of a category that brought money back', () => {
+    const flow = moneyFlow([month({ Salary: 1000 }, { Rent: 500, Groceries: -300 })]);
+    expect(pick(flow.sources)).toEqual([
+      ['Salary', 1000],
+      ['Groceries refunds', 300],
+    ]);
+    expect(flow.sources[1]).toMatchObject({
+      key: 'spending:Groceries',
+      side: 'in',
+      origin: 'spending',
+      category: 'Groceries',
+    });
+  });
+
+  it('keeps returned income apart from spending in the same category', () => {
     const flow = moneyFlow([month({ Salary: 1000, Gifts: -100 }, { Gifts: 400 })]);
     expect(pick(flow.uses)).toEqual([
-      ['Gifts', 500],
+      ['Gifts', 400],
+      ['Gifts returned', 100],
       ['Saved', 500],
     ]);
+    expect(flow.uses.map((item) => item.key)).toEqual(['spending:Gifts', 'income:Gifts', 'saved']);
   });
 
   it('folds the smallest categories into Other', () => {
@@ -77,8 +93,17 @@ describe('moneyFlow', () => {
       ['Other', 600],
       ['Saved', 3500],
     ]);
-    expect(flow.uses[2]).toMatchObject({ kind: 'other', folded: ['C', 'D', 'E'] });
+    expect(flow.uses[2]?.kind).toBe('other');
+    expect(flow.uses[2]?.folded.map((item) => item.label)).toEqual(['C', 'D', 'E']);
     expect(new Set(flow.uses.map((item) => item.key)).size).toBe(4);
+  });
+
+  it('folds everything into Other when the limit is below one', () => {
+    const flow = moneyFlow([month({ Salary: 1000 }, { A: 500, B: 300 })], 0);
+    expect(pick(flow.uses)).toEqual([
+      ['Other', 800],
+      ['Saved', 200],
+    ]);
   });
 
   it('keeps a category called Other apart from the folded ones', () => {
@@ -197,6 +222,27 @@ describe('flowLayout', () => {
     expect(Math.max(...ins.map((node) => node.x + tiny.nodeWidth))).toBeLessThan(tiny.hub.x);
     expect(tiny.hub.x + tiny.nodeWidth).toBeLessThan(Math.min(...outs.map((node) => node.x)));
     expect(tiny.width).toBeGreaterThan(160);
+  });
+
+  it('cuts long names on whole letters, allowing for wide ones', () => {
+    const tamil = 'மற்றும் பல செலவுகள்';
+    const caps = 'HOUSEHOLD AND KITCHEN';
+    const lower = 'household and kitchen';
+    const narrow = flowLayout(
+      moneyFlow([month({ Salary: 3000 }, { [tamil]: 1000, [caps]: 1000, [lower]: 1000 })]),
+      320,
+    );
+    const shown = (name: string) =>
+      narrow.nodes.find((node) => node.item.label === name)?.label.text ?? '';
+    expect(shown(caps).length).toBeLessThan(shown(lower).length);
+    const letters = (text: string) =>
+      [...new Intl.Segmenter(undefined, { granularity: 'grapheme' }).segment(text)].map(
+        (part) => part.segment,
+      );
+    expect(shown(tamil).endsWith('…')).toBe(true);
+    const kept = letters(shown(tamil).slice(0, -1));
+    expect(kept.length).toBeGreaterThan(0);
+    expect(kept).toEqual(letters(tamil).slice(0, kept.length));
   });
 
   it('shortens long names to fit a narrow screen', () => {

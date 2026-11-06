@@ -1,13 +1,18 @@
 import type { CashFlowMonth } from '@kanakku/core';
 
 export type FlowKind = 'category' | 'other' | 'savings';
+export type FlowSide = 'in' | 'out';
+export type FlowOrigin = 'income' | 'spending';
 
 export interface FlowItem {
   key: string;
   label: string;
   value: number;
   kind: FlowKind;
-  folded: string[];
+  side: FlowSide;
+  origin?: FlowOrigin;
+  category?: string;
+  folded: FlowItem[];
 }
 
 export interface MoneyFlow {
@@ -28,54 +33,82 @@ export function categoryTotals(parts: Array<Record<string, number>>): Array<[str
   return [...sums].sort((a, b) => b[1] - a[1]);
 }
 
-function add(side: Map<string, number>, category: string, amount: number): void {
-  side.set(category, (side.get(category) ?? 0) + amount);
-}
-
 function sumOf(items: FlowItem[]): number {
   return items.reduce((sum, item) => sum + item.value, 0);
 }
 
-function fold(side: Map<string, number>, prefix: string, limit: number): FlowItem[] {
-  const sorted = [...side].sort((a, b) => b[1] - a[1] || (a[0] < b[0] ? -1 : a[0] > b[0] ? 1 : 0));
-  const kept = sorted.length > limit ? sorted.slice(0, limit - 1) : sorted;
-  const items: FlowItem[] = kept.map(([category, value]) => ({
-    key: `${prefix}:${category}`,
-    label: category,
-    value,
+function byValue(a: FlowItem, b: FlowItem): number {
+  return b.value - a.value || (a.label < b.label ? -1 : a.label > b.label ? 1 : 0);
+}
+
+function categoryItem(origin: FlowOrigin, category: string, total: number): FlowItem {
+  const moved = total < 0;
+  const side: FlowSide = (origin === 'income') !== moved ? 'in' : 'out';
+  let label = category;
+  if (moved && origin === 'income') label = `${category} returned`;
+  if (moved && origin === 'spending' && category !== 'Refunds') label = `${category} refunds`;
+  return {
+    key: `${origin}:${category}`,
+    label,
+    value: Math.abs(total),
     kind: 'category',
+    side,
+    origin,
+    category,
     folded: [],
-  }));
-  const rest = sorted.slice(kept.length);
-  if (rest.length > 0) {
-    items.push({
-      key: `${prefix}*`,
-      label: 'Other',
-      value: rest.reduce((sum, [, value]) => sum + value, 0),
-      kind: 'other',
-      folded: rest.map(([category]) => category),
-    });
-  }
-  return items;
+  };
+}
+
+function fold(items: FlowItem[], side: FlowSide, limit: number): FlowItem[] {
+  const sorted = [...items].sort(byValue);
+  if (sorted.length <= limit) return sorted;
+  const rest = sorted.slice(limit - 1);
+  return [
+    ...sorted.slice(0, limit - 1),
+    { key: `other-${side}`, label: 'Other', value: sumOf(rest), kind: 'other', side, folded: rest },
+  ];
 }
 
 export function moneyFlow(months: CashFlowMonth[], limit = 7): MoneyFlow {
-  const ins = new Map<string, number>();
-  const outs = new Map<string, number>();
-  for (const [category, amount] of categoryTotals(months.map((month) => month.incomeBy))) {
-    if (amount > 0) add(ins, category, amount);
-    else if (amount < 0) add(outs, category, -amount);
-  }
-  for (const [category, amount] of categoryTotals(months.map((month) => month.spendingBy))) {
-    if (amount > 0) add(outs, category, amount);
-    else if (amount < 0) add(ins, category, -amount);
-  }
-  const sources = fold(ins, 'in', limit);
-  const uses = fold(outs, 'out', limit);
+  const items = [
+    ...categoryTotals(months.map((month) => month.incomeBy)).map(([category, total]) =>
+      categoryItem('income', category, total),
+    ),
+    ...categoryTotals(months.map((month) => month.spendingBy)).map(([category, total]) =>
+      categoryItem('spending', category, total),
+    ),
+  ].filter((item) => item.value > 0);
+  const keep = Math.max(1, limit);
+  const sources = fold(
+    items.filter((item) => item.side === 'in'),
+    'in',
+    keep,
+  );
+  const uses = fold(
+    items.filter((item) => item.side === 'out'),
+    'out',
+    keep,
+  );
   const net = sumOf(sources) - sumOf(uses);
-  if (net > 0) uses.push({ key: 'saved', label: 'Saved', value: net, kind: 'savings', folded: [] });
+  if (net > 0) {
+    uses.push({
+      key: 'saved',
+      label: 'Saved',
+      value: net,
+      kind: 'savings',
+      side: 'out',
+      folded: [],
+    });
+  }
   if (net < 0) {
-    sources.push({ key: 'drawn', label: 'From savings', value: -net, kind: 'savings', folded: [] });
+    sources.push({
+      key: 'shortfall',
+      label: 'Shortfall',
+      value: -net,
+      kind: 'savings',
+      side: 'in',
+      folded: [],
+    });
   }
   return {
     sources,
@@ -121,11 +154,27 @@ const GAP = 8;
 const HUB_LABEL = 44;
 const NODE_WIDTH = 10;
 const LABEL_GAP = 8;
-const CHAR_WIDTH = 7.5;
+const ELLIPSIS_WIDTH = 8;
 const MIN_WIDTH = 320;
 
-function clip(text: string, chars: number): string {
-  return text.length > chars ? `${text.slice(0, chars - 1).trimEnd()}…` : text;
+const letters = new Intl.Segmenter(undefined, { granularity: 'grapheme' });
+
+function letterWidth(letter: string): number {
+  if (/^[A-Z]$/.test(letter)) return 9;
+  return /^[ -~]$/.test(letter) ? 7 : 11;
+}
+
+function fit(text: string, room: number): string {
+  const parts = [...letters.segment(text)].map((part) => part.segment);
+  const widths = parts.map(letterWidth);
+  if (widths.reduce((sum, width) => sum + width, 0) <= room) return text;
+  let used = ELLIPSIS_WIDTH;
+  let count = 0;
+  while (count < parts.length && used + (widths[count] ?? 0) <= room) {
+    used += widths[count] ?? 0;
+    count += 1;
+  }
+  return `${parts.slice(0, count).join('').trimEnd()}…`;
 }
 
 function columnHeight(heights: number[]): number {
@@ -142,7 +191,6 @@ export function flowLayout(flow: MoneyFlow, space: number): FlowLayout {
   );
   const middle = Math.max(HUB_LABEL + HUB_HEIGHT / 2, tallest / 2);
   const labelWidth = Math.round(Math.min(150, Math.max(84, width * 0.18)));
-  const chars = Math.floor((labelWidth - LABEL_GAP - 4) / CHAR_WIDTH);
   const hub = { x: (width - NODE_WIDTH) / 2, y: middle - HUB_HEIGHT / 2, height: HUB_HEIGHT };
 
   const column = (items: FlowItem[], side: 'in' | 'out', x: number): FlowNode[] => {
@@ -171,7 +219,7 @@ export function flowLayout(flow: MoneyFlow, space: number): FlowLayout {
           x: side === 'in' ? x - LABEL_GAP : x + NODE_WIDTH + LABEL_GAP,
           y: y + height / 2,
           anchor: side === 'in' ? 'end' : 'start',
-          text: clip(item.label, chars),
+          text: fit(item.label, labelWidth - LABEL_GAP - 4),
         },
         link: side === 'in' ? { from: bar, to: end } : { from: end, to: bar },
       };

@@ -124,6 +124,7 @@ export function createApp(options: AppOptions): App {
   };
   let ledgerJson: string | undefined;
   let watching: { key: string; watch: FolderWatch } | undefined;
+  let builtFor: IsoDate | undefined;
   let closed = false;
 
   function foldersToWatch(config?: Config): string[] {
@@ -146,6 +147,8 @@ export function createApp(options: AppOptions): App {
   }
 
   function rebuild(): void {
+    const today = options.today();
+    builtFor = today;
     try {
       const contents = loadDataFolder(dataFolder);
       if (options.watch) rewatch(contents.config);
@@ -163,7 +166,7 @@ export function createApp(options: AppOptions): App {
           config: contents.config,
           decisions: contents.decisions,
           rates: contents.rates,
-          today: options.today(),
+          today,
         });
         const tidy = planTidy({
           ledger,
@@ -205,6 +208,7 @@ export function createApp(options: AppOptions): App {
       req.headers['x-kanakku-token'] ??
       (url.pathname === '/api/events' ? url.searchParams.get('token') : undefined);
     if (!sameToken(given, token)) return text(res, 401, 'Unauthorized');
+    if (url.pathname !== '/api/events' && options.today() !== builtFor) rebuild();
     switch (url.pathname) {
       case '/api/status':
         return json(res, 200, current.status);

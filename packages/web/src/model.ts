@@ -14,6 +14,7 @@ import {
   monthKey,
   type NeedsItem,
   netWorthSeries,
+  parseYmd,
   rateBookFor,
   startOfMonth,
 } from '@kanakku/core';
@@ -171,6 +172,14 @@ export function rangeFor(
       return first ? { from: first, to: today } : rangeEndingAt(today, 1);
     }
   }
+}
+
+export function linkRange(query: Record<string, string> | undefined, range: DateRange): DateRange {
+  const from = query?.from && parseYmd(query.from) ? query.from : undefined;
+  const to = query?.to && parseYmd(query.to) ? query.to : undefined;
+  if (!from && !to) return range;
+  const linked = { from: from ?? range.from, to: to ?? range.to };
+  return linked.from <= linked.to ? linked : range;
 }
 
 export function latestMonth(ledger: Ledger): string {

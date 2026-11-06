@@ -44,6 +44,8 @@ describe('transferRows', () => {
     };
     const rows = transferRows(flagged, range);
     expect(transfersOnTab(rows, 'all').map((row) => row.status)).toEqual([
+      'waiting',
+      'possible',
       'one-sided',
       'matched',
       'matched',

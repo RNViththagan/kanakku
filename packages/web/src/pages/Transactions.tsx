@@ -1,7 +1,7 @@
 import { DataGrid, MenuItem, Stack, TextField } from '@wso2/oxygen-ui';
 import { useMemo, useState } from 'react';
 import { money, shortDate } from '../format';
-import { type TransactionRow, transactionRows } from '../model';
+import { linkRange, type TransactionRow, transactionRows } from '../model';
 import { filterTransactions } from '../tables';
 import { Section, Title } from '../ui';
 import type { PageProps } from './types';
@@ -77,8 +77,8 @@ export function Transactions({ ledger, route, range, rangeLabel }: PageProps) {
   const [account, setAccount] = useState(query.account ?? '');
   const [kind, setKind] = useState(query.kind ?? '');
   const [category, setCategory] = useState(query.category ?? '');
-  const from = query.from ?? range.from;
-  const to = query.to ?? range.to;
+  const linked = linkRange(route.query, range);
+  const { from, to } = linked;
   const categories = useMemo(
     () => [...new Set(all.map((row) => row.category).filter(Boolean))].sort(),
     [all],
@@ -88,7 +88,7 @@ export function Transactions({ ledger, route, range, rangeLabel }: PageProps) {
     [all, search, account, kind, category, from, to],
   );
   const period =
-    query.from || query.to ? `${shortDate(from, locale)} to ${shortDate(to, locale)}` : rangeLabel;
+    linked === range ? rangeLabel : `${shortDate(from, locale)} to ${shortDate(to, locale)}`;
 
   return (
     <>

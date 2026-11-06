@@ -29,6 +29,7 @@ import {
 import { type ReactNode, useEffect, useState } from 'react';
 import { type Status, useLedger } from './api';
 import { RANGE_PRESETS, type RangePreset, rangeFor } from './model';
+import { PageView } from './PageView';
 import { PAGE_TITLES, PAGES } from './pages';
 import { hrefFor, type PageId, parseHash, type Route } from './routes';
 
@@ -141,11 +142,11 @@ export function App() {
       </Alert>
     );
   } else {
-    const Page = PAGES[page];
     const range = rangeFor(preset, ledger.today, ledger);
     const rangeLabel = RANGE_PRESETS.find((option) => option.id === preset)?.label ?? '';
     content = (
-      <Page
+      <PageView
+        pages={PAGES}
         ledger={ledger}
         status={status}
         tidy={tidy}

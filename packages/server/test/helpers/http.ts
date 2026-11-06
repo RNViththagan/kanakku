@@ -44,12 +44,14 @@ export function makeWebRoot(): string {
   return root;
 }
 
-export async function serve(options: { dataFolder?: string; watch?: boolean } = {}) {
+export async function serve(
+  options: { dataFolder?: string; watch?: boolean; today?: () => string } = {},
+) {
   const app = createApp({
     dataFolder: options.dataFolder ?? world,
     webRoot: makeWebRoot(),
     token: TOKEN,
-    today: () => '2026-02-20',
+    today: options.today ?? (() => '2026-02-20'),
     watch: options.watch,
   });
   await new Promise<void>((done) => app.server.listen(0, '127.0.0.1', done));

@@ -4,6 +4,7 @@ import { loadWorld } from '../../core/test/helpers/world';
 import {
   accountsByBank,
   latestMonth,
+  linkRange,
   needsByType,
   overviewStats,
   rangeEndingAt,
@@ -204,5 +205,27 @@ describe('topNeeds', () => {
       'card-due',
       'uncategorised',
     ]);
+  });
+});
+
+describe('linkRange', () => {
+  const range = { from: '2025-03-01', to: '2026-02-20' };
+
+  it('uses the dates in a link', () => {
+    expect(linkRange({ from: '2026-02-01', to: '2026-02-20' }, range)).toEqual({
+      from: '2026-02-01',
+      to: '2026-02-20',
+    });
+    expect(linkRange({ from: '2026-02-01' }, range)).toEqual({
+      from: '2026-02-01',
+      to: '2026-02-20',
+    });
+  });
+
+  it('ignores dates that are not real dates or not in order', () => {
+    expect(linkRange({ from: 'abc' }, range)).toEqual(range);
+    expect(linkRange({ from: '2026-02-30' }, range)).toEqual(range);
+    expect(linkRange({ from: '2026-03-01', to: '2026-02-01' }, range)).toEqual(range);
+    expect(linkRange(undefined, range)).toEqual(range);
   });
 });

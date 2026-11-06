@@ -123,6 +123,17 @@ describe('local app', () => {
     expect(status.stale).toBe(true);
   });
 
+  it('moves to a new day without a file change', async () => {
+    let day = '2026-02-20';
+    const { port } = await serve({ today: () => day });
+    const events = await openStream(port, `/api/events?token=${TOKEN}`);
+    expect(JSON.parse((await send(port, '/api/ledger')).body).today).toBe('2026-02-20');
+    day = '2026-02-21';
+    expect(JSON.parse((await send(port, '/api/status')).body).files).toBe(7);
+    expect(JSON.parse((await send(port, '/api/ledger')).body).today).toBe('2026-02-21');
+    await events.waitFor('event: changed');
+  });
+
   it('tells open pages when the ledger is rebuilt', async () => {
     const { app, port } = await serve();
     const events = await openStream(port, `/api/events?token=${TOKEN}`);

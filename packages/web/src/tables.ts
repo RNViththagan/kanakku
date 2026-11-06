@@ -97,10 +97,7 @@ export function transfersOnTab(rows: TransferRow[], tab: TransferTab): TransferR
     case 'deposits':
       return rows.filter((row) => row.deposit);
     case 'all':
-      return rows.filter(
-        (row) =>
-          row.status === 'matched' || row.status === 'confirmed' || row.status === 'one-sided',
-      );
+      return rows;
   }
 }
 

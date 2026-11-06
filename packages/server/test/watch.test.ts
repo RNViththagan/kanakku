@@ -1,3 +1,4 @@
+import { EventEmitter } from 'node:events';
 import { mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { afterEach, describe, expect, it } from 'vitest';
@@ -26,7 +27,7 @@ async function watchCounting(folders: string[]) {
     () => {
       seen.calls += 1;
     },
-    200,
+    { delayMs: 200 },
   );
   onCleanup(() => watcher.close());
   await settle(400);
@@ -67,6 +68,47 @@ describe('watchFolders', () => {
     const { seen } = await watchCounting([join(folder, 'missing'), folder]);
     writeFileSync(join(folder, 'a.csv'), 'x');
     await until(() => seen.calls > 0, 1500);
+  });
+
+  it('watches a folder that appears later', async () => {
+    const folder = join(tempDir(), 'later');
+    const seen = { calls: 0 };
+    const watcher = watchFolders(
+      [folder],
+      () => {
+        seen.calls += 1;
+      },
+      { delayMs: 100, retryMs: 100 },
+    );
+    onCleanup(() => watcher.close());
+    await settle(300);
+    mkdirSync(folder);
+    await until(() => seen.calls > 0, 1500);
+    await settle(300);
+    seen.calls = 0;
+    writeFileSync(join(folder, 'a.csv'), 'x');
+    await until(() => seen.calls > 0, 1500);
+  });
+
+  it('starts a watcher again after it fails', async () => {
+    const started: EventEmitter[] = [];
+    const watch = () => {
+      const watcher = Object.assign(new EventEmitter(), { close: () => undefined });
+      started.push(watcher);
+      return watcher;
+    };
+    const seen = { calls: 0 };
+    const watcher = watchFolders(
+      [tempDir()],
+      () => {
+        seen.calls += 1;
+      },
+      { delayMs: 50, retryMs: 50, watch },
+    );
+    onCleanup(() => watcher.close());
+    expect(started).toHaveLength(1);
+    started[0]?.emit('error', new Error('watch failed'));
+    await until(() => started.length === 2 && seen.calls > 0, 1500);
   });
 
   it('stops after close', async () => {

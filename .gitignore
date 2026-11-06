@@ -1,0 +1,19 @@
+node_modules/
+dist/
+coverage/
+*.tsbuildinfo
+*.log
+.DS_Store
+.env
+.env.*
+!.env.example
+
+# Real statements and personal data never belong in this repo.
+*.csv
+*.xls
+*.xlsx
+*.pdf
+!**/fixtures/**/*.csv
+/dev-data/
+config.yaml
+CLAUDE.local.md

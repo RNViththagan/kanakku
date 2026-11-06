@@ -1,5 +1,11 @@
+const BYTE_ORDER_MARK = 0xfeff;
+
+export function stripBom(text: string): string {
+  return text.charCodeAt(0) === BYTE_ORDER_MARK ? text.slice(1) : text;
+}
+
 export function parseCsv(text: string): string[][] {
-  const input = text.startsWith('\uFEFF') ? text.slice(1) : text;
+  const input = stripBom(text);
   const rows: string[][] = [];
   let row: string[] = [];
   let cell = '';

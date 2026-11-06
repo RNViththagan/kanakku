@@ -1,7 +1,7 @@
 import { cashFlowByMonth } from '@kanakku/core';
 import { describe, expect, it } from 'vitest';
 import { loadWorld } from '../../core/test/helpers/world';
-import { drillEntries, findItem, groupEntries, payeeOf } from '../src/drill';
+import { drillEntries, findItem, groupEntries, payeeOf, resolveItem } from '../src/drill';
 import { type FlowItem, moneyFlow } from '../src/flow';
 
 const ledger = loadWorld();
@@ -33,6 +33,12 @@ describe('payeeOf', () => {
     );
   });
 
+  it('ignores month names so a monthly payment stays one payee', () => {
+    expect(payeeOf({ description: 'APRIL RENT' })).toBe('RENT');
+    expect(payeeOf({ description: 'Rent Sept 2026' })).toBe('RENT');
+    expect(payeeOf({ description: 'RENT AUGUST / 0001 / -' })).toBe('RENT');
+  });
+
   it('says so when nothing readable is left', () => {
     expect(payeeOf({ description: '000123 / - / -' })).toBe('No description');
   });
@@ -45,6 +51,24 @@ describe('findItem', () => {
     expect(flow.uses.some((use) => use.key === 'spending:Fees')).toBe(false);
     expect(item('spending:Fees').value).toBe(11000);
     expect(findItem(flow, 'spending:Nothing')).toBeUndefined();
+  });
+});
+
+describe('resolveItem', () => {
+  it('still opens a category that is not drawn in the flow', () => {
+    expect(resolveItem(flow, 'spending:Groceries')).toMatchObject({
+      kind: 'category',
+      origin: 'spending',
+      category: 'Groceries',
+      side: 'out',
+      value: 0,
+    });
+    expect(resolveItem(flow, 'income:Gifts')?.side).toBe('in');
+    expect(resolveItem(flow, 'nonsense')).toBeUndefined();
+  });
+
+  it('prefers what the flow holds', () => {
+    expect(resolveItem(flow, 'income:Salary')?.value).toBe(15000000);
   });
 });
 

@@ -25,6 +25,11 @@ export interface DrillGroup {
   count: number;
 }
 
+const MONTHS = new Set([
+  ...'jan feb mar apr may jun jul aug sep sept oct nov dec'.split(' '),
+  ...'january february march april june july august september october november december'.split(' '),
+]);
+
 export function payeeOf({
   description,
   counterparty,
@@ -34,7 +39,9 @@ export function payeeOf({
     .replace(/[:/|]+/g, ' ')
     .split(/\s+/)
     .map((word) => word.replace(/\d+/g, '').replace(/^[^\p{L}]+|[^\p{L}.]+$/gu, ''))
-    .filter((word) => /\p{L}/u.test(word) && !/^x+$/i.test(word));
+    .filter(
+      (word) => /\p{L}/u.test(word) && !/^x+$/i.test(word) && !MONTHS.has(word.toLowerCase()),
+    );
   return words.length > 0 ? words.join(' ').toUpperCase() : 'No description';
 }
 
@@ -45,6 +52,26 @@ export function findItem(flow: MoneyFlow, key: string): FlowItem | undefined {
     if (folded) return folded;
   }
   return undefined;
+}
+
+export function resolveItem(flow: MoneyFlow, key: string): FlowItem | undefined {
+  const found = findItem(flow, key);
+  if (found) return found;
+  const mark = key.indexOf(':');
+  const origin = key.slice(0, Math.max(mark, 0));
+  const category = key.slice(mark + 1);
+  if (origin !== 'income' && origin !== 'spending') return undefined;
+  if (!category) return undefined;
+  return {
+    key,
+    label: category,
+    value: 0,
+    kind: 'category',
+    side: origin === 'income' ? 'in' : 'out',
+    origin,
+    category,
+    folded: [],
+  };
 }
 
 function counts(part: Part, item: FlowItem): boolean {

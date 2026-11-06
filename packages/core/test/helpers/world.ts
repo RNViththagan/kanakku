@@ -6,7 +6,8 @@ import { loadConfig } from '../../src/config/load';
 import type { Decision } from '../../src/decisions/load';
 import { buildLedger } from '../../src/ledger/build';
 
-const root = fileURLToPath(new URL('../fixtures/ledger', import.meta.url));
+const root =
+  process.env.KANAKKU_WORLD ?? fileURLToPath(new URL('../fixtures/ledger', import.meta.url));
 
 export const WORLD_TODAY = '2026-02-20';
 

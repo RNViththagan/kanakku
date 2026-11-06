@@ -179,23 +179,36 @@ function overlaps(a: Period, b: Period): boolean {
 }
 
 function markFileProblems(group: Entry[], transactions: Transaction[]) {
-  for (const entry of group) {
+  const preferred = [...group].sort(
+    (a, b) =>
+      b.rows.length - a.rows.length ||
+      Number(parseTidyName(b.file.name) !== undefined) -
+        Number(parseTidyName(a.file.name) !== undefined) ||
+      (a.file.path < b.file.path ? -1 : a.file.path > b.file.path ? 1 : 0),
+  );
+  const kept: Entry[] = [];
+  for (const entry of preferred) {
     const { period } = entry;
-    if (!period) continue;
-    const others = group.filter((other) => other !== entry && other.period);
-    if (others.some((other) => other.period && overlaps(other.period, period))) {
-      const own = transactions.filter((row) =>
-        row.sources.some((source) => source.file === entry.file.path),
-      );
-      const onlyHere = own.filter((row) =>
-        row.sources.every((source) => source.file === entry.file.path),
-      );
-      const inside = others.some(
+    const keptPaths = new Set(kept.map((other) => other.file.path));
+    const own = transactions.filter((row) =>
+      row.sources.some((source) => source.file === entry.file.path),
+    );
+    const coveredByKept =
+      entry.rows.length > 0 &&
+      own.every((row) => row.sources.some((source) => keptPaths.has(source.file))) &&
+      period !== undefined &&
+      kept.some(
         (other) => other.period && other.period.from <= period.from && other.period.to >= period.to,
       );
-      if (entry.rows.length > 0 && onlyHere.length === 0 && inside)
-        entry.status.problems.push('duplicate');
-      else entry.status.problems.push('overlapping');
+    if (coveredByKept) entry.status.problems.push('duplicate');
+    else kept.push(entry);
+  }
+  for (const entry of group) {
+    const { period } = entry;
+    if (!period || entry.status.problems.includes('duplicate')) continue;
+    const others = group.filter((other) => other !== entry && other.period);
+    if (others.some((other) => other.period && overlaps(other.period, period))) {
+      entry.status.problems.push('overlapping');
     }
   }
 }
@@ -203,7 +216,8 @@ function markFileProblems(group: Entry[], transactions: Transaction[]) {
 function markNames(entries: Entry[], accounts: Account[]) {
   for (const entry of entries) {
     const { account, plugin, file, rows, parsed } = entry;
-    let period = entry.period;
+    const fromData = filePeriod(parsed, '', rows);
+    let period = fromData ? { from: fromData.from, to: fromData.to } : entry.period;
     let partial = false;
     const firstRow = rows[0];
     const lastRow = rows.at(-1);

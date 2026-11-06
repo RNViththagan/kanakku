@@ -125,6 +125,86 @@ describe('buildLedger on the fixture world', () => {
     expect(result.accounts).toHaveLength(6);
   });
 
+  const withFiles = (
+    extra: ReturnType<typeof worldFiles>,
+    decisions: Parameters<typeof loadWorld>[0] = [],
+  ) =>
+    buildLedger({
+      files: [...worldFiles(), ...extra],
+      config: worldConfig(),
+      decisions,
+      rates: [],
+      today: WORLD_TODAY,
+    });
+
+  it('does not trust a tidy name whose period misses the rows', () => {
+    const misnamed = {
+      path: 'hnb/HNB_33333XXXXX33_LKR_2026-01-01_to_2026-01-31_2.csv',
+      name: 'HNB_33333XXXXX33_LKR_2026-01-01_to_2026-01-31_2.csv',
+      folderBank: 'hnb',
+      text: [
+        'Date, Ref.No, Particulars, Debits, Credits, Balance',
+        '05/02/2026,DC000009,Finacle Alert Charges,25,,54928.10',
+        '28/02/2026,,BALANCE AS AT DATE,,,54928.10',
+      ].join('\n'),
+    };
+    const result = withFiles([misnamed]);
+    const status = result.files.find((file) => file.path === misnamed.path);
+    expect(status?.period).toEqual({ from: '2026-02-01', to: '2026-02-28' });
+    expect(status?.problems).toContain('improper-name');
+    expect(status?.tidyName).toBe('HNB_33333XXXXX33_LKR_2026-02-01_to_2026-02-28.csv');
+    expect(result.coverage['hnb-lkr']?.lastCovered).toBe('2026-02-28');
+  });
+
+  it('keeps one of two identical copies and offers the other for the bin', () => {
+    const original = worldFiles().find(
+      (file) => file.name === 'BOC_0011111111_2026-01-01_to_2026-01-31.csv',
+    );
+    if (!original) throw new Error('fixture missing');
+    const copy = { ...original, path: 'boc/copy (1).csv', name: 'copy (1).csv' };
+    const result = withFiles([copy]);
+    const problems = (path: string) =>
+      result.files.find((file) => file.path === path)?.problems ?? [];
+    expect(problems(original.path)).not.toContain('duplicate');
+    expect(problems(copy.path)).toContain('duplicate');
+  });
+
+  it('keeps need ids stable when files move and new when the situation changes', () => {
+    const junk = worldFiles().find((file) => file.name === 'notes.csv');
+    if (!junk) throw new Error('fixture missing');
+    const moved = { ...junk, path: 'boc/old/notes-renamed.csv', name: 'notes-renamed.csv' };
+    const before = ledger.needs.find((need) => need.type === 'unreadable-file')?.id;
+    const files = worldFiles().map((file) => (file.name === 'notes.csv' ? moved : file));
+    const after = buildLedger({
+      files,
+      config: worldConfig(),
+      decisions: [],
+      rates: [],
+      today: WORLD_TODAY,
+    }).needs.find((need) => need.type === 'unreadable-file')?.id;
+    expect(after).toBe(before);
+
+    const uncategorised = ledger.needs.find((need) => need.type === 'uncategorised');
+    const dismissed = [
+      { id: 'd1', at: 'x', type: 'dismiss' as const, item: uncategorised?.id ?? '' },
+    ];
+    expect(loadWorld(dismissed).needs.map((need) => need.type)).not.toContain('uncategorised');
+    const boc = worldFiles().find((file) => file.name === 'BOC_RECEIPT_overlap.csv');
+    if (!boc) throw new Error('fixture missing');
+    const newer = {
+      ...boc,
+      path: 'boc/BOC_0011111111_2026-02-15_to_2026-02-18.csv',
+      name: 'BOC_0011111111_2026-02-15_to_2026-02-18.csv',
+      text: boc.text
+        .replace(
+          'Statement Period,2026-01-20 to 2026-02-15',
+          'Statement Period,2026-02-15 to 2026-02-18',
+        )
+        .replace('2026-02-03,POS       CAFE THREE', '2026-02-17,POS       CAFE FOUR'),
+    };
+    expect(withFiles([newer], dismissed).needs.map((need) => need.type)).toContain('uncategorised');
+  });
+
   it('is plain data', () => {
     expect(JSON.parse(JSON.stringify(ledger))).toEqual(ledger);
   });

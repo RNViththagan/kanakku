@@ -91,7 +91,7 @@ export function buildNeeds(
     if (file.status === 'unreadable') {
       all.push({
         type: 'unreadable-file',
-        key: file.path,
+        key: file.hash,
         message: `${fileName} could not be read as a bank statement.`,
         refs: { file: file.path },
       });
@@ -99,7 +99,7 @@ export function buildNeeds(
     if (file.issues.some((issue) => issue.code === 'totals-mismatch')) {
       all.push({
         type: 'totals-mismatch',
-        key: file.path,
+        key: file.hash,
         message: `The bank's totals in ${fileName} do not match its rows.`,
         refs: { file: file.path },
       });
@@ -167,7 +167,12 @@ export function buildNeeds(
   if (uncategorised.length > 0) {
     all.push({
       type: 'uncategorised',
-      key: 'all',
+      key: hashText(
+        uncategorised
+          .map((row) => row.id)
+          .sort()
+          .join('|'),
+      ),
       message: `${uncategorised.length} spending rows have no category.`,
       refs: { txns: uncategorised.map((row) => row.id) },
       data: { count: uncategorised.length },
@@ -249,7 +254,12 @@ export function buildNeeds(
   if (untidy.length > 0) {
     all.push({
       type: 'tidy',
-      key: 'all',
+      key: hashText(
+        untidy
+          .map((file) => `${file.hash}:${file.problems.join(',')}`)
+          .sort()
+          .join('|'),
+      ),
       message: `${untidy.length} statement files have improper names, sit in the wrong folder or repeat other files.`,
       refs: {},
       data: { count: untidy.length, files: untidy.map((file) => file.path) },

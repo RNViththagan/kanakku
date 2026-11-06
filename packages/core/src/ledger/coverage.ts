@@ -40,7 +40,17 @@ export function filePeriod(
     return { from: parsed.period.from, to: parsed.period.to, source: 'stated' };
   }
   const tidy = parseTidyName(fileName);
-  if (tidy) return { from: tidy.from, to: tidy.to, source: 'tidy-name' };
+  const dataDates = [
+    ...rows.map((row) => row.date),
+    ...(parsed.closing ? [parsed.closing.date] : []),
+  ].sort();
+  const dataFrom = dataDates[0];
+  const dataTo = dataDates.at(-1);
+  const tidyCoversData =
+    tidy !== undefined &&
+    (dataFrom === undefined || tidy.from <= dataFrom) &&
+    (dataTo === undefined || tidy.to >= dataTo);
+  if (tidy && tidyCoversData) return { from: tidy.from, to: tidy.to, source: 'tidy-name' };
   if (parsed.period?.inferred)
     return { from: parsed.period.from, to: parsed.period.to, source: 'inferred' };
   const dates = rows.map((row) => row.date).sort();

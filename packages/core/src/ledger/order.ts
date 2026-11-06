@@ -113,25 +113,12 @@ function orderDay(
   return undefined;
 }
 
-export function toChronological(rows: MoneyRow[]): {
-  rows: MoneyRow[];
-  direction: Direction;
-  issues: Issue[];
-} {
+export function orderDays(rows: MoneyRow[]): { rows: MoneyRow[]; issues: Issue[] } {
   const issues: Issue[] = [];
-  const withBalances = rows.length > 0 && rows.every((row) => row.balance !== undefined);
-  const direction: Direction = withBalances ? vote(rows) : 'unknown';
-  let ordered = direction === 'newest-first' ? [...rows].reverse() : [...rows];
-  if (direction === 'unknown' && withBalances && rows.length > 1) {
-    const first = rows[0]?.date ?? '';
-    const last = rows.at(-1)?.date ?? '';
-    if (first > last) ordered = [...rows].reverse();
-  }
-  ordered.sort((a, b) => (a.date < b.date ? -1 : a.date > b.date ? 1 : 0));
-  if (!withBalances) return { rows: ordered, direction: 'unknown', issues };
-
+  const sorted = [...rows].sort((a, b) => (a.date < b.date ? -1 : a.date > b.date ? 1 : 0));
+  if (!sorted.every((row) => row.balance !== undefined)) return { rows: sorted, issues };
   const days: MoneyRow[][] = [];
-  for (const row of ordered) {
+  for (const row of sorted) {
     const day = days.at(-1);
     if (day && day[0]?.date === row.date) day.push(row);
     else days.push([row]);
@@ -154,5 +141,26 @@ export function toChronological(rows: MoneyRow[]): {
       });
     }
   });
-  return { rows: days.flat(), direction, issues };
+  return { rows: days.flat(), issues };
+}
+
+export function toChronological(rows: MoneyRow[]): {
+  rows: MoneyRow[];
+  direction: Direction;
+  issues: Issue[];
+} {
+  const withBalances = rows.length > 0 && rows.every((row) => row.balance !== undefined);
+  const direction: Direction = withBalances ? vote(rows) : 'unknown';
+  let ordered = direction === 'newest-first' ? [...rows].reverse() : rows;
+  if (direction === 'unknown' && withBalances && rows.length > 1) {
+    const first = rows[0]?.date ?? '';
+    const last = rows.at(-1)?.date ?? '';
+    if (first > last) ordered = [...rows].reverse();
+  }
+  const result = orderDays(ordered);
+  return {
+    rows: result.rows,
+    direction: withBalances ? direction : 'unknown',
+    issues: result.issues,
+  };
 }

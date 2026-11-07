@@ -1,9 +1,11 @@
 import { describe, expect, it } from 'vitest';
 import type { WordingTag } from '../src/banks/types';
 import type { Account } from '../src/config/schema';
-import type { Decision } from '../src/decisions/load';
+import { type Decision, type DecisionContent, decisionId } from '../src/decisions/load';
 import { applyPairAnswers, matchTransfers } from '../src/ledger/transfers';
-import type { Transaction } from '../src/ledger/types';
+import type { Ledger, Transaction } from '../src/ledger/types';
+import { cashFlowByMonth } from '../src/views/cash-flow';
+import { loadWorld } from './helpers/world';
 
 const account = (id: string, fields: Partial<Account> = {}): Account => ({
   id,
@@ -282,10 +284,66 @@ describe('applyPairAnswers', () => {
       tx('i', 'D', '2026-03-29', 10000000),
     ];
     const decisions: Decision[] = [{ id: 'd', at: 'x', type: 'pair', out: 'o', in: 'i' }];
-    const result = applyPairAnswers(rows, decisions);
+    const result = applyPairAnswers(rows, decisions, accounts);
     expect(result.transfers).toEqual([
       expect.objectContaining({ out: 'o', in: 'i', status: 'confirmed', rule: 'answer' }),
     ]);
     expect(byId(result.txns, 'o')).toMatchObject({ kind: 'transfer', decidedBy: 'answer' });
+  });
+});
+
+describe('transfer answers', () => {
+  const plain = loadWorld();
+  const grocer = plain.transactions.find((row) =>
+    row.description.startsWith('POS       GROCER ONE'),
+  );
+  if (!grocer) throw new Error('fixture row missing');
+  const answer = (content: DecisionContent) =>
+    ({ id: decisionId(content), at: 'x', ...content }) as Decision;
+  const to = (account: string) => answer({ type: 'transfer', txn: grocer.id, account });
+  const january = (ledger: Ledger) =>
+    cashFlowByMonth(ledger, { from: '2026-01-01', to: '2026-01-31' })[0]?.spending ?? 0;
+  const row = (ledger: Ledger) => ledger.transactions.find((item) => item.id === grocer.id);
+
+  it('counts a row as a transfer to the account you name', () => {
+    const ledger = loadWorld([to('hnb-lkr')]);
+    expect(row(ledger)).toMatchObject({ kind: 'transfer', decidedBy: 'answer' });
+    expect(ledger.transfers.find((transfer) => transfer.out === grocer.id)).toMatchObject({
+      from: 'boc-main',
+      to: 'hnb-lkr',
+      rule: 'answer',
+      status: 'one-sided',
+      amountOut: 350000,
+    });
+    expect(january(ledger)).toBe(january(plain) - 350000);
+    expect(ledger.unusedDecisions).toEqual([]);
+  });
+
+  it("ignores and lists as unused a transfer answer naming the row's own account, a deposit, a missing row or a paired row", () => {
+    const cases: Decision[][] = [
+      [to('boc-main')],
+      [to('deposit-combank-3099999999')],
+      [to('no-such-account')],
+      [answer({ type: 'transfer', txn: 'no-such-row', account: 'hnb-lkr' })],
+    ];
+    for (const decisions of cases) {
+      const ledger = loadWorld(decisions);
+      expect(row(ledger)?.kind).toBe('spending');
+      expect(ledger.unusedDecisions).toEqual(decisions.map((decision) => decision.id));
+    }
+    const pairedRow = plain.transactions.find(
+      (item) => item.amount > 0 && item.account === 'hnb-lkr',
+    );
+    if (!pairedRow) throw new Error('fixture credit missing');
+    const both = [answer({ type: 'pair', out: grocer.id, in: pairedRow.id }), to('cb-savings')];
+    const ledger = loadWorld(both);
+    expect(ledger.transfers.filter((transfer) => transfer.out === grocer.id)).toHaveLength(1);
+    expect(ledger.unusedDecisions).toContain(both[1]?.id);
+  });
+
+  it('removing the answer brings the row back to spending', () => {
+    expect(row(loadWorld([to('hnb-lkr')]))?.kind).toBe('transfer');
+    expect(row(loadWorld([]))).toEqual(row(plain));
+    expect(row(plain)?.kind).toBe('spending');
   });
 });

@@ -266,6 +266,11 @@ describe('buildLedger on the fixture world', () => {
     ]);
   });
 
+  it('copies the category lists into the ledger', () => {
+    const { income, spending } = worldConfig().categories;
+    expect(ledger.categories).toEqual({ income, spending });
+  });
+
   it('is plain data', () => {
     expect(JSON.parse(JSON.stringify(ledger))).toEqual(ledger);
   });

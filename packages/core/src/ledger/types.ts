@@ -107,6 +107,7 @@ export interface Ledger {
   closings: Record<string, Array<{ date: IsoDate; balance: number }>>;
   depositMoves: DepositMove[];
   depositEndings: DepositEnding[];
+  categories: { income: string[]; spending: string[] };
   needs: NeedsItem[];
   issues: Issue[];
   rates: { source: string; stored: RateQuote[]; manual: Record<CurrencyCode, string> };

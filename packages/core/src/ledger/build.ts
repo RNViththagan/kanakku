@@ -291,6 +291,7 @@ function unusedDecisions(
   decisions: Decision[],
   ledger: Omit<Ledger, 'unusedDecisions'>,
   needIds: Set<string>,
+  skipped: Set<string>,
 ): string[] {
   const txns = new Set(ledger.transactions.map((row) => row.id));
   const hashes = new Set(ledger.files.map((file) => file.hash));
@@ -310,6 +311,8 @@ function unusedDecisions(
           return !accounts.has(decision.deposit);
         case 'dismiss':
           return !needIds.has(decision.item);
+        case 'transfer':
+          return skipped.has(decision.id);
         case 'counterparty':
           return !descriptions.some((text) => text.includes(decision.text.toLowerCase()));
         default:
@@ -385,7 +388,7 @@ export function buildLedger(input: LedgerInput): Ledger {
     decisions,
     categories: config.categories,
   });
-  const paired = applyPairAnswers(transactions, decisions);
+  const paired = applyPairAnswers(transactions, decisions, accounts);
   const deposits = trackDeposits(paired.txns, { accounts, decisions });
   accounts.push(...deposits.accounts);
   issues.push(...deposits.issues);
@@ -449,6 +452,7 @@ export function buildLedger(input: LedgerInput): Ledger {
     closings,
     depositMoves: deposits.moves,
     depositEndings: deposits.endings,
+    categories: { income: config.categories.income, spending: config.categories.spending },
     issues,
     rates: { source: config.rates.source, stored: input.rates, manual: config.rates.manual },
   };
@@ -464,6 +468,7 @@ export function buildLedger(input: LedgerInput): Ledger {
       decisions,
       withNeeds,
       new Set(allNeeds.map((need) => need.id)),
+      new Set(paired.skipped),
     ),
   };
 }

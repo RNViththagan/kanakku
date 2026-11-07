@@ -96,7 +96,8 @@ function pairFee(out: Transaction, incoming: Transaction): number {
 export function applyPairAnswers(
   txns: Transaction[],
   decisions: Decision[],
-): { txns: Transaction[]; transfers: Transfer[] } {
+  accounts: Account[],
+): { txns: Transaction[]; transfers: Transfer[]; skipped: string[] } {
   const rows = new Map(txns.map((row) => [row.id, row]));
   const transfers: Transfer[] = [];
   const used = new Set<string>();
@@ -124,7 +125,41 @@ export function applyPairAnswers(
     used.add(incoming.id);
     transfers.push(transfer);
   }
-  return { txns: txns.map((row) => rows.get(row.id) ?? row), transfers };
+  const owners = new Map(accounts.map((account) => [account.id, account]));
+  const skipped: string[] = [];
+  for (const decision of decisions) {
+    if (decision.type !== 'transfer') continue;
+    const row = rows.get(decision.txn);
+    const target = owners.get(decision.account);
+    if (
+      !row ||
+      !target ||
+      target.id === row.account ||
+      target.type === 'fixed-deposit' ||
+      used.has(row.id)
+    ) {
+      skipped.push(decision.id);
+      continue;
+    }
+    const outgoing = row.amount < 0;
+    const transfer = linkTransfer(outgoing ? row : undefined, outgoing ? undefined : row, {
+      from: outgoing ? row.account : target.id,
+      to: outgoing ? target.id : row.account,
+      date: row.date,
+      amountOut: Math.abs(row.amount),
+      currencyOut: row.currency,
+      fee: 0,
+      rule: 'answer',
+      status: 'one-sided',
+    });
+    rows.set(
+      row.id,
+      outgoing ? settleOut(row, 0, transfer, 'answer') : settleIn(row, transfer, 'answer'),
+    );
+    used.add(row.id);
+    transfers.push(transfer);
+  }
+  return { txns: txns.map((row) => rows.get(row.id) ?? row), transfers, skipped };
 }
 
 function hinted(row: Transaction): boolean {

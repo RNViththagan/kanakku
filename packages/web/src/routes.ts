@@ -10,6 +10,7 @@ export const PAGE_IDS = [
   'transactions',
   'statements',
   'needs',
+  'settings',
 ] as const;
 
 export type PageId = (typeof PAGE_IDS)[number];

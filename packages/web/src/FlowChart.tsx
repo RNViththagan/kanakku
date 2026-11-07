@@ -27,7 +27,7 @@ function through(flow: MoneyFlow): string {
   return flow.income >= flow.outgoing ? 'Money in' : 'Money out';
 }
 
-function colorOf(item: FlowItem, colors: MoneyColors): string {
+export function colorOf(item: FlowItem, colors: MoneyColors): string {
   if (item.kind === 'savings') return colors.savings;
   return item.side === 'in' ? colors.income : colors.outgoing;
 }

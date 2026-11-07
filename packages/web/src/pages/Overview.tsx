@@ -3,10 +3,8 @@ import {
   Box,
   Chip,
   Grid,
-  LinearProgress,
   Link,
   Stack,
-  StatCard,
   Table,
   TableBody,
   TableCell,
@@ -27,14 +25,21 @@ import {
 } from '../model';
 import { hrefFor } from '../routes';
 import { netWorthPoints } from '../series';
-import { Amount, CoverageBar, Empty, MoneyArea, Section, Title } from '../ui';
+import {
+  Amount,
+  Change,
+  CoverageBar,
+  Empty,
+  MoneyArea,
+  Section,
+  ShareBar,
+  Stat,
+  Title,
+  useMoneyColors,
+} from '../ui';
 import type { PageProps } from './types';
 
 export const SEVERITY_COLORS = { high: 'error', normal: 'warning', low: 'default' } as const;
-
-function signed(text: string, value: number): string {
-  return value > 0 ? `+${text}` : text;
-}
 
 export function Overview({ ledger }: PageProps) {
   const { today, homeCurrency: home, locale } = ledger;
@@ -54,7 +59,8 @@ export function Overview({ ledger }: PageProps) {
   const needs = topNeeds(ledger, 5);
   const lastMonth = monthLabel(monthKey(addDays(startOfMonth(today), -1)), locale);
   const thisMonth = monthLabel(monthKey(today), locale);
-  const short = (minor: number) => `${compact(minor, home, locale)} ${home}`;
+  const short = (minor: number) => compact(minor, home, locale);
+  const colors = useMoneyColors();
   const names = new Map(ledger.accounts.map((account) => [account.id, account.name]));
 
   return (
@@ -62,49 +68,59 @@ export function Overview({ ledger }: PageProps) {
       <Title title="Overview" subtitle={`Your money on ${shortDate(today, locale)}`} />
       <Grid container spacing={2} sx={{ mb: 3 }}>
         <Grid size={{ xs: 12, sm: 6, lg: stats.hasCards ? 2.4 : 3 }}>
-          <StatCard
-            label={
-              stats.netWorthChange === undefined
-                ? 'Net worth'
-                : `Net worth, ${signed(compact(stats.netWorthChange, home, locale), stats.netWorthChange)} since ${lastMonth}`
-            }
+          <Stat
+            label="Net worth"
             value={short(stats.netWorth)}
-            icon={<Wallet size={24} />}
-          />
+            unit={home}
+            icon={<Wallet size={18} />}
+          >
+            {stats.netWorthChange === undefined ? null : (
+              <Change
+                minor={stats.netWorthChange}
+                currency={home}
+                locale={locale}
+                since={`since ${lastMonth}`}
+              />
+            )}
+          </Stat>
         </Grid>
         <Grid size={{ xs: 12, sm: 6, lg: stats.hasCards ? 2.4 : 3 }}>
-          <StatCard
+          <Stat
             label="In accounts"
             value={short(stats.inAccounts)}
-            icon={<Landmark size={24} />}
-            iconColor="info"
+            unit={home}
+            icon={<Landmark size={18} />}
           />
         </Grid>
         <Grid size={{ xs: 12, sm: 6, lg: stats.hasCards ? 2.4 : 3 }}>
-          <StatCard
+          <Stat
             label="In fixed deposits"
             value={short(stats.inDeposits)}
-            icon={<PiggyBank size={24} />}
-            iconColor="success"
+            unit={home}
+            icon={<PiggyBank size={18} />}
           />
         </Grid>
         {stats.hasCards ? (
           <Grid size={{ xs: 12, sm: 6, lg: 2.4 }}>
-            <StatCard
+            <Stat
               label="Owed on cards"
               value={short(stats.owedOnCards)}
-              icon={<CreditCard size={24} />}
-              iconColor="warning"
+              unit={home}
+              icon={<CreditCard size={18} />}
             />
           </Grid>
         ) : null}
         <Grid size={{ xs: 12, sm: 6, lg: stats.hasCards ? 2.4 : 3 }}>
-          <StatCard
-            label={`Spent in ${thisMonth}, ${compact(stats.spentLastMonth, home, locale)} in ${lastMonth}`}
+          <Stat
+            label={`Spent in ${thisMonth}`}
             value={short(stats.spentThisMonth)}
-            icon={<ShoppingCart size={24} />}
-            iconColor="secondary"
-          />
+            unit={home}
+            icon={<ShoppingCart size={18} />}
+          >
+            <Typography variant="body2" color="text.secondary">
+              {`${short(stats.spentLastMonth)} ${home} in ${lastMonth}`}
+            </Typography>
+          </Stat>
         </Grid>
       </Grid>
       {stats.unknown.length > 0 || stats.unvalued.length > 0 ? (
@@ -131,6 +147,7 @@ export function Overview({ ledger }: PageProps) {
             series={[{ key: 'value', name: 'Net worth' }]}
             currency={home}
             locale={locale}
+            colors={[colors.savings]}
           />
         )}
       </Section>
@@ -194,10 +211,9 @@ export function Overview({ ledger }: PageProps) {
                         {money(item.total, home, locale)}
                       </Typography>
                     </Stack>
-                    <LinearProgress
-                      variant="determinate"
+                    <ShareBar
                       value={spentInMonth > 0 ? (item.total / spentInMonth) * 100 : 0}
-                      sx={{ height: 6, borderRadius: 1, mt: 0.5 }}
+                      color={colors.outgoing}
                     />
                   </Box>
                 ))}

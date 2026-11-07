@@ -3,7 +3,6 @@ import {
   Box,
   Breadcrumbs,
   Button,
-  LinearProgress,
   Link,
   Stack,
   ToggleButton,
@@ -12,12 +11,12 @@ import {
 } from '@wso2/oxygen-ui';
 import { type ReactNode, useEffect, useMemo, useRef, useState } from 'react';
 import { DRILL_BY, type DrillBy, drillEntries, groupEntries, groupKey, resolveItem } from './drill';
-import { FlowChart } from './FlowChart';
+import { colorOf, FlowChart } from './FlowChart';
 import type { FlowItem, MoneyFlow } from './flow';
 import { transactionRows } from './model';
 import { TransactionTable } from './pages/Transactions';
 import { hrefFor, type Route } from './routes';
-import { Amount, Empty } from './ui';
+import { Amount, Empty, ShareBar, useMoneyColors } from './ui';
 
 const BY_LABELS: Record<DrillBy, string> = { payee: 'Payee', month: 'Month', account: 'Account' };
 const SHOWN = 30;
@@ -40,6 +39,7 @@ function Row({
   value,
   note,
   scale,
+  color,
   currency,
   locale,
 }: {
@@ -48,6 +48,7 @@ function Row({
   value: number;
   note?: string;
   scale: number;
+  color: string;
   currency: CurrencyCode;
   locale: string;
 }) {
@@ -66,11 +67,7 @@ function Row({
           ) : null}
         </Typography>
       </Stack>
-      <LinearProgress
-        variant="determinate"
-        value={scale > 0 ? (Math.max(value, 0) / scale) * 100 : 0}
-        sx={{ height: 6, borderRadius: 1, mt: 0.5 }}
-      />
+      <ShareBar value={scale > 0 ? (Math.max(value, 0) / scale) * 100 : 0} color={color} />
     </Box>
   );
 }
@@ -130,6 +127,7 @@ export function FlowExplorer({
   const by: DrillBy = item?.kind === 'savings' ? 'month' : isDrillBy(query.by) ? query.by : 'payee';
   const [all, setAll] = useState(false);
   const box = useRef<HTMLDivElement>(null);
+  const colors = useMoneyColors();
   const names = useMemo(
     () => new Map(ledger.accounts.map((account) => [account.id, account.name])),
     [ledger],
@@ -203,6 +201,7 @@ export function FlowExplorer({
             label={part.label}
             value={part.value}
             scale={scale}
+            color={colorOf(part, colors)}
             currency={home}
             locale={locale}
           />
@@ -226,6 +225,7 @@ export function FlowExplorer({
             value={entry.value}
             note={counted(entry.count)}
             scale={scale}
+            color={colorOf(item, colors)}
             currency={home}
             locale={locale}
           />

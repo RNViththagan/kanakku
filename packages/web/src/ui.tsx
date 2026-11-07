@@ -3,6 +3,7 @@ import {
   Box,
   Card,
   CardContent,
+  LinearProgress,
   PageTitle,
   Stack,
   Tooltip,
@@ -10,9 +11,13 @@ import {
   useColorScheme,
 } from '@wso2/oxygen-ui';
 import { AreaChart, BarChart, YAxis } from '@wso2/oxygen-ui-charts-react';
+import { TrendingDown, TrendingUp } from '@wso2/oxygen-ui-icons-react';
 import { type ReactNode, useRef } from 'react';
-import { formatMajor, money, shortDate } from './format';
+import { compact, formatMajor, money, shortDate } from './format';
+import { OTHER } from './series';
 import { coverageBar } from './tables';
+
+const UNCATEGORISED = 'Uncategorised';
 
 export function Title({ title, subtitle }: { title: string; subtitle?: string }) {
   return (
@@ -79,6 +84,119 @@ export function Amount({
   );
 }
 
+export function ShareBar({ value, color }: { value: number; color: string }) {
+  return (
+    <LinearProgress
+      variant="determinate"
+      value={Math.min(100, Math.max(0, value))}
+      sx={{
+        height: 6,
+        borderRadius: 1,
+        mt: 0.5,
+        bgcolor: `color-mix(in srgb, ${color} 16%, transparent)`,
+        '& .MuiLinearProgress-bar': { bgcolor: color, borderRadius: 1 },
+      }}
+    />
+  );
+}
+
+export function Stat({
+  label,
+  value,
+  unit,
+  icon,
+  children,
+}: {
+  label: string;
+  value: string;
+  unit?: string;
+  icon: ReactNode;
+  children?: ReactNode;
+}) {
+  return (
+    <Card variant="outlined" sx={{ height: '100%' }}>
+      <CardContent>
+        <Stack direction="row" sx={{ alignItems: 'center', gap: 1.25, mb: 1.5 }}>
+          <Box
+            sx={{
+              width: 32,
+              height: 32,
+              flexShrink: 0,
+              borderRadius: '50%',
+              display: 'grid',
+              placeItems: 'center',
+              color: 'primary.main',
+              bgcolor: 'color-mix(in srgb, currentColor 14%, transparent)',
+            }}
+          >
+            {icon}
+          </Box>
+          <Typography variant="body2" color="text.secondary">
+            {label}
+          </Typography>
+        </Stack>
+        <Typography
+          component="div"
+          sx={{
+            fontSize: '1.875rem',
+            fontWeight: 600,
+            lineHeight: 1.15,
+            letterSpacing: '-0.02em',
+            fontVariantNumeric: 'tabular-nums',
+          }}
+        >
+          {value}
+          {unit ? (
+            <Box
+              component="span"
+              sx={{
+                ml: 0.75,
+                fontSize: '0.875rem',
+                fontWeight: 500,
+                letterSpacing: 0,
+                color: 'text.secondary',
+              }}
+            >
+              {unit}
+            </Box>
+          ) : null}
+        </Typography>
+        {children ? <Box sx={{ mt: 1 }}>{children}</Box> : null}
+      </CardContent>
+    </Card>
+  );
+}
+
+export function Change({
+  minor,
+  currency,
+  locale,
+  since,
+}: {
+  minor: number;
+  currency: CurrencyCode;
+  locale: string;
+  since: string;
+}) {
+  const Icon = minor < 0 ? TrendingDown : TrendingUp;
+  return (
+    <Stack direction="row" sx={{ alignItems: 'center', gap: 0.75, flexWrap: 'wrap' }}>
+      <Stack
+        direction="row"
+        sx={{ alignItems: 'center', gap: 0.5, color: minor < 0 ? 'error.main' : 'success.main' }}
+      >
+        <Icon size={16} aria-hidden />
+        <Typography variant="body2" sx={{ color: 'inherit', fontVariantNumeric: 'tabular-nums' }}>
+          {`${minor > 0 ? '+' : ''}${compact(minor, currency, locale)}`}
+        </Typography>
+      </Stack>
+      <Typography variant="body2" color="text.secondary">
+        {since}
+      </Typography>
+    </Stack>
+  );
+}
+
 const STATE_COLORS = {
   covered: 'success.main',
   quiet: 'success.light',
@@ -135,10 +253,38 @@ const MONEY_COLORS: Record<'light' | 'dark', MoneyColors> = {
   dark: { income: '#3987e5', outgoing: '#d95926', savings: '#199e70' },
 };
 
-export function useMoneyColors(): MoneyColors {
+export function useDark(): boolean {
   const { mode, systemMode } = useColorScheme();
-  const dark = mode === 'dark' || (mode === 'system' && systemMode === 'dark');
-  return dark ? MONEY_COLORS.dark : MONEY_COLORS.light;
+  return mode === 'dark' || (mode === 'system' && systemMode === 'dark');
+}
+
+export function useMoneyColors(): MoneyColors {
+  return useDark() ? MONEY_COLORS.dark : MONEY_COLORS.light;
+}
+
+const CATEGORY_COLORS = {
+  light: {
+    hues: ['#e34948', '#eda100', '#e87ba4', '#008300', '#6250d6'],
+    unsorted: '#9e9e9e',
+    rest: '#c7c7c7',
+  },
+  dark: {
+    hues: ['#e66767', '#c98500', '#d55181', '#008300', '#9085e9'],
+    unsorted: '#8a8a8a',
+    rest: '#5c5c5c',
+  },
+};
+
+export function categoryColors(categories: string[], dark: boolean): string[] {
+  const set = dark ? CATEGORY_COLORS.dark : CATEGORY_COLORS.light;
+  let named = 0;
+  return categories.map((category) => {
+    if (category === UNCATEGORISED) return set.unsorted;
+    if (category === OTHER) return set.rest;
+    const hue = set.hues[named % set.hues.length] ?? set.rest;
+    named += 1;
+    return hue;
+  });
 }
 
 export interface ChartPoint {

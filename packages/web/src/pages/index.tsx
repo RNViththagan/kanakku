@@ -7,6 +7,7 @@ import { Conversions } from './Conversions';
 import { Needs } from './Needs';
 import { NetWorth } from './NetWorth';
 import { Overview } from './Overview';
+import { Settings } from './Settings';
 import { Spending } from './Spending';
 import { Statements } from './Statements';
 import { Transactions } from './Transactions';
@@ -25,6 +26,7 @@ export const PAGE_TITLES: Record<PageId, string> = {
   transactions: 'Transactions',
   statements: 'Statements',
   needs: 'Needs you',
+  settings: 'Settings',
 };
 
 export const PAGES: Record<PageId, ComponentType<PageProps>> = {
@@ -39,4 +41,5 @@ export const PAGES: Record<PageId, ComponentType<PageProps>> = {
   transactions: Transactions,
   statements: Statements,
   needs: Needs,
+  settings: Settings,
 };

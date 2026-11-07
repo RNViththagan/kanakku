@@ -13,7 +13,7 @@ import { money, monthLabel, shortDate, toMajor } from '../format';
 import { hrefFor } from '../routes';
 import { netWorthPoints } from '../series';
 import { type DepositRow, depositRows } from '../tables';
-import { Amount, Empty, MoneyArea, Section, Title } from '../ui';
+import { Amount, Empty, MoneyArea, Section, Title, useMoneyColors } from '../ui';
 import type { PageProps } from './types';
 
 function shortName(account: Account): string {
@@ -57,6 +57,7 @@ export function NetWorth({ ledger, range, rangeLabel }: PageProps) {
     .filter((row) => row.status === 'withdrawn')
     .sort((a, b) => (b.closed ?? '').localeCompare(a.closed ?? ''));
   const names = new Map(ledger.accounts.map((account) => [account.id, account.name]));
+  const colors = useMoneyColors();
 
   return (
     <>
@@ -74,6 +75,7 @@ export function NetWorth({ ledger, range, rangeLabel }: PageProps) {
             currency={home}
             locale={locale}
             height={320}
+            colors={[colors.savings]}
           />
         )}
       </Section>

@@ -53,4 +53,21 @@ describe('useStoredChoice', () => {
     localStorage.setItem(KEY, 'weekly');
     expect(show().textContent).toBe('monthly');
   });
+
+  it('keeps every place that reads the same choice in step', () => {
+    host = document.createElement('div');
+    document.body.append(host);
+    root = createRoot(host);
+    act(() =>
+      root?.render(
+        <>
+          <Probe />
+          <Probe />
+        </>,
+      ),
+    );
+    const [first, second] = [...host.querySelectorAll('button')];
+    act(() => first?.click());
+    expect(second?.textContent).toBe('cumulative');
+  });
 });

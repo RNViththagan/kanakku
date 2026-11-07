@@ -2,7 +2,6 @@ import { findBank } from '@kanakku/core';
 import {
   Box,
   Chip,
-  LinearProgress,
   Table,
   TableBody,
   TableCell,
@@ -15,7 +14,7 @@ import { money, monthLabel, shortDate, toMajor } from '../format';
 import { accountRow, transactionRows } from '../model';
 import { balanceSeries } from '../series';
 import { depositRows, fileRows, filterTransactions } from '../tables';
-import { CoverageBar, Empty, MoneyArea, Section, Title } from '../ui';
+import { CoverageBar, Empty, MoneyArea, Section, ShareBar, Title, useMoneyColors } from '../ui';
 import { ACCOUNT_TYPES } from './Accounts';
 import { TransactionTable } from './Transactions';
 import type { PageProps } from './types';
@@ -30,6 +29,7 @@ const CYCLE_STATUS = {
 
 export function Account({ ledger, route, range, rangeLabel }: PageProps) {
   const { locale } = ledger;
+  const colors = useMoneyColors();
   const account = ledger.accounts.find((candidate) => candidate.id === route.param);
   const row = useMemo(() => (account ? accountRow(ledger, account) : undefined), [ledger, account]);
   const series = useMemo(
@@ -115,6 +115,7 @@ export function Account({ ledger, route, range, rangeLabel }: PageProps) {
               series={[{ key: 'value', name: card ? 'Owed' : 'Balance' }]}
               currency={currency}
               locale={locale}
+              colors={[card ? colors.outgoing : colors.savings]}
             />
           </Box>
         ) : null}
@@ -127,11 +128,7 @@ export function Account({ ledger, route, range, rangeLabel }: PageProps) {
               <Typography variant="body2">
                 {`${money(owed, currency, locale)} used of ${money(limit, currency, locale)}`}
               </Typography>
-              <LinearProgress
-                variant="determinate"
-                value={limit > 0 ? Math.min(100, Math.max(0, (owed / limit) * 100)) : 0}
-                sx={{ height: 6, borderRadius: 1, mt: 0.5 }}
-              />
+              <ShareBar value={limit > 0 ? (owed / limit) * 100 : 0} color={colors.outgoing} />
             </Box>
           ) : null}
           {cycles.length === 0 ? (

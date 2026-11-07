@@ -24,10 +24,12 @@ import {
   LayoutDashboard,
   List,
   Repeat,
+  Settings,
   Wallet,
 } from '@wso2/oxygen-ui-icons-react';
 import { type ReactNode, useEffect, useState } from 'react';
 import { type Status, useLedger } from './api';
+import { Backdrop } from './Backdrop';
 import { RANGE_PRESETS, type RangePreset, rangeFor } from './model';
 import { PageView } from './PageView';
 import { PAGE_TITLES, PAGES } from './pages';
@@ -143,64 +145,77 @@ export function App() {
   }
 
   return (
-    <AppShell>
-      <AppShell.Navbar>
-        <Header>
-          <Header.Toggle />
-          <Header.Brand onClick={() => go({ page: 'overview' })}>
-            <Header.BrandLogo>
-              <Wallet size={22} />
-            </Header.BrandLogo>
-            <Header.BrandTitle>Kanakku</Header.BrandTitle>
-          </Header.Brand>
-          <Header.Spacer />
-          <Header.Actions>
-            <Select
-              size="small"
-              value={preset}
-              onChange={(event) => setPreset(event.target.value as RangePreset)}
-              inputProps={{ 'aria-label': 'Date range' }}
-            >
-              {RANGE_PRESETS.map((option) => (
-                <MenuItem key={option.id} value={option.id}>
-                  {option.label}
-                </MenuItem>
-              ))}
-            </Select>
-            <Chip
-              icon={<BellRing size={16} />}
-              label={needs === 1 ? '1 needs you' : `${needs} need you`}
-              color={needs > 0 ? 'warning' : 'default'}
-              variant="outlined"
-              onClick={() => go({ page: 'needs' })}
-            />
-            <ColorSchemeToggle />
-          </Header.Actions>
-        </Header>
-      </AppShell.Navbar>
-      <AppShell.Sidebar>
-        <Sidebar activeItem={active} onSelect={(id) => go({ page: id as PageId })}>
-          <Sidebar.Nav>
-            <Sidebar.Category>
-              {NAV.filter((item) => item.id !== 'conversions' || foreign).map((item) => (
-                <Sidebar.Item key={item.id} id={item.id}>
-                  <Sidebar.ItemIcon>{item.icon}</Sidebar.ItemIcon>
-                  <Sidebar.ItemLabel>{PAGE_TITLES[item.id]}</Sidebar.ItemLabel>
-                  {item.id === 'needs' && needs > 0 ? (
-                    <Sidebar.ItemBadge color="warning">{needs}</Sidebar.ItemBadge>
-                  ) : null}
+    <>
+      <Backdrop />
+      <AppShell>
+        <AppShell.Navbar>
+          <Header>
+            <Header.Toggle />
+            <Header.Brand onClick={() => go({ page: 'overview' })}>
+              <Header.BrandLogo>
+                <Wallet size={22} />
+              </Header.BrandLogo>
+              <Header.BrandTitle>Kanakku</Header.BrandTitle>
+            </Header.Brand>
+            <Header.Spacer />
+            <Header.Actions>
+              <Select
+                size="small"
+                value={preset}
+                onChange={(event) => setPreset(event.target.value as RangePreset)}
+                inputProps={{ 'aria-label': 'Date range' }}
+              >
+                {RANGE_PRESETS.map((option) => (
+                  <MenuItem key={option.id} value={option.id}>
+                    {option.label}
+                  </MenuItem>
+                ))}
+              </Select>
+              <Chip
+                icon={<BellRing size={16} />}
+                label={needs === 1 ? '1 needs you' : `${needs} need you`}
+                color={needs > 0 ? 'warning' : 'default'}
+                variant="outlined"
+                onClick={() => go({ page: 'needs' })}
+              />
+              <ColorSchemeToggle />
+            </Header.Actions>
+          </Header>
+        </AppShell.Navbar>
+        <AppShell.Sidebar>
+          <Sidebar activeItem={active} onSelect={(id) => go({ page: id as PageId })}>
+            <Sidebar.Nav>
+              <Sidebar.Category>
+                {NAV.filter((item) => item.id !== 'conversions' || foreign).map((item) => (
+                  <Sidebar.Item key={item.id} id={item.id}>
+                    <Sidebar.ItemIcon>{item.icon}</Sidebar.ItemIcon>
+                    <Sidebar.ItemLabel>{PAGE_TITLES[item.id]}</Sidebar.ItemLabel>
+                    {item.id === 'needs' && needs > 0 ? (
+                      <Sidebar.ItemBadge color="warning">{needs}</Sidebar.ItemBadge>
+                    ) : null}
+                  </Sidebar.Item>
+                ))}
+              </Sidebar.Category>
+            </Sidebar.Nav>
+            <Sidebar.Footer>
+              <Sidebar.Category>
+                <Sidebar.Item id="settings">
+                  <Sidebar.ItemIcon>
+                    <Settings size={18} />
+                  </Sidebar.ItemIcon>
+                  <Sidebar.ItemLabel>{PAGE_TITLES.settings}</Sidebar.ItemLabel>
                 </Sidebar.Item>
-              ))}
-            </Sidebar.Category>
-          </Sidebar.Nav>
-        </Sidebar>
-      </AppShell.Sidebar>
-      <AppShell.Main>
-        <PageContent>
-          {status ? <StatusBanner status={status} /> : null}
-          {content}
-        </PageContent>
-      </AppShell.Main>
-    </AppShell>
+              </Sidebar.Category>
+            </Sidebar.Footer>
+          </Sidebar>
+        </AppShell.Sidebar>
+        <AppShell.Main>
+          <PageContent>
+            {status ? <StatusBanner status={status} /> : null}
+            {content}
+          </PageContent>
+        </AppShell.Main>
+      </AppShell>
+    </>
   );
 }

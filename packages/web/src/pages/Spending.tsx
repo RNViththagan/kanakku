@@ -1,10 +1,19 @@
 import { spendingByCategory } from '@kanakku/core';
-import { Box, LinearProgress, Link, Stack, Typography } from '@wso2/oxygen-ui';
+import { Box, Link, Stack, Typography } from '@wso2/oxygen-ui';
 import { useMemo } from 'react';
 import { money, monthLabel, toMajor } from '../format';
 import { hrefFor } from '../routes';
 import { spendingTrend } from '../series';
-import { Empty, MoneyBars, Section, Title } from '../ui';
+import {
+  categoryColors,
+  Empty,
+  MoneyBars,
+  Section,
+  ShareBar,
+  Title,
+  useDark,
+  useMoneyColors,
+} from '../ui';
 import type { PageProps } from './types';
 
 export function Spending({ ledger, range, rangeLabel }: PageProps) {
@@ -12,6 +21,8 @@ export function Spending({ ledger, range, rangeLabel }: PageProps) {
   const categories = useMemo(() => spendingByCategory(ledger, range), [ledger, range]);
   const trend = useMemo(() => spendingTrend(ledger, range), [ledger, range]);
   const total = categories.reduce((sum, item) => sum + item.total, 0);
+  const colors = useMoneyColors();
+  const dark = useDark();
 
   return (
     <>
@@ -39,10 +50,9 @@ export function Spending({ ledger, range, rangeLabel }: PageProps) {
                     </Typography>
                   </Typography>
                 </Stack>
-                <LinearProgress
-                  variant="determinate"
+                <ShareBar
                   value={total > 0 ? (item.total / total) * 100 : 0}
-                  sx={{ height: 6, borderRadius: 1, mt: 0.5 }}
+                  color={colors.outgoing}
                 />
               </Box>
             ))}
@@ -64,6 +74,7 @@ export function Spending({ ledger, range, rangeLabel }: PageProps) {
               ),
             }))}
             series={trend.categories.map((category) => ({ key: category, name: category }))}
+            colors={categoryColors(trend.categories, dark)}
             currency={home}
             locale={locale}
             stacked

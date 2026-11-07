@@ -18,8 +18,10 @@ import type { ReactNode } from 'react';
 import { usePattern } from '../appearance';
 import { useConfig } from '../config';
 import { SettingsAccounts } from '../SettingsAccounts';
+import { SettingsGeneral } from '../SettingsGeneral';
 import { SettingsRules } from '../SettingsRules';
 import { Section, Title, useDark } from '../ui';
+import { YourAnswers } from '../YourAnswers';
 import type { PageProps } from './types';
 
 type Mode = 'light' | 'dark' | 'system';
@@ -174,7 +176,13 @@ export function Settings({ ledger }: PageProps) {
         loaded={loaded}
         problem={problem}
       />
-      {config ? <SettingsRules ledger={ledger} config={config} reload={reload} /> : null}
+      {config ? (
+        <>
+          <SettingsRules ledger={ledger} config={config} reload={reload} />
+          <SettingsGeneral ledger={ledger} config={config} reload={reload} />
+        </>
+      ) : null}
+      <YourAnswers ledger={ledger} />
     </>
   );
 }

@@ -16,7 +16,10 @@ import {
 import { Monitor, Moon, Sun } from '@wso2/oxygen-ui-icons-react';
 import type { ReactNode } from 'react';
 import { usePattern } from '../appearance';
+import { useConfig } from '../config';
+import { SettingsAccounts } from '../SettingsAccounts';
 import { Section, Title, useDark } from '../ui';
+import type { PageProps } from './types';
 
 type Mode = 'light' | 'dark' | 'system';
 
@@ -67,92 +70,109 @@ function Swatch({ option, dark }: { option: ThemeOption; dark: boolean }) {
   );
 }
 
-export function Settings() {
+function Appearance() {
   const { currentTheme, themes, setTheme } = useThemeSwitcher();
   const { mode, setMode } = useColorScheme();
   const [pattern, setPattern] = usePattern();
   const dark = useDark();
 
   return (
+    <Section title="Appearance">
+      <Typography variant="subtitle2" component="h3" sx={{ mb: 1 }}>
+        Theme
+      </Typography>
+      <RadioGroup
+        name="theme"
+        value={currentTheme}
+        onChange={(_event, key) => setTheme(key)}
+        sx={{
+          display: 'grid',
+          gridTemplateColumns: 'repeat(auto-fill, minmax(168px, 1fr))',
+          gap: 1.5,
+        }}
+      >
+        {themes.map((option) => (
+          <FormControlLabel
+            key={option.key}
+            value={option.key}
+            control={<Radio size="small" />}
+            label={
+              <Stack spacing={1} sx={{ pt: 0.75 }}>
+                <Swatch option={option} dark={dark} />
+                <Typography variant="body2">{option.label}</Typography>
+              </Stack>
+            }
+            sx={{
+              m: 0,
+              p: 1,
+              pr: 1.5,
+              alignItems: 'flex-start',
+              border: 1,
+              borderRadius: 2,
+              borderColor: option.key === currentTheme ? 'primary.main' : 'divider',
+              '& .MuiFormControlLabel-label': { flex: 1 },
+            }}
+          />
+        ))}
+      </RadioGroup>
+      <Typography variant="body2" color="text.secondary" sx={{ mt: 1.5 }}>
+        Charts keep their colours in every theme: blue for money in, orange for money out and green
+        for what you keep.
+      </Typography>
+
+      <Typography variant="subtitle2" component="h3" sx={{ mt: 3, mb: 1 }}>
+        Light or dark
+      </Typography>
+      <ToggleButtonGroup
+        exclusive
+        size="small"
+        value={mode ?? 'system'}
+        onChange={(_event, next: Mode | null) => {
+          if (next) setMode(next);
+        }}
+        aria-label="Light or dark"
+        sx={{ flexWrap: 'wrap', '& .MuiToggleButton-root': { gap: 0.75, textTransform: 'none' } }}
+      >
+        {MODES.map((item) => (
+          <ToggleButton key={item.id} value={item.id}>
+            {item.icon}
+            {item.label}
+          </ToggleButton>
+        ))}
+      </ToggleButtonGroup>
+
+      <Typography variant="subtitle2" component="h3" sx={{ mt: 3, mb: 0.5 }}>
+        Background
+      </Typography>
+      <FormControlLabel
+        control={
+          <Switch
+            checked={pattern === 'on'}
+            onChange={(event) => setPattern(event.target.checked ? 'on' : 'off')}
+          />
+        }
+        label="Engraved pattern behind the pages, like on a banknote"
+      />
+    </Section>
+  );
+}
+
+export function Settings({ ledger }: PageProps) {
+  const { config, errors, loaded, problem } = useConfig(ledger);
+  return (
     <>
-      <Title title="Settings" subtitle="How Kanakku looks in this browser" />
-      <Section title="Appearance">
-        <Typography variant="subtitle2" component="h3" sx={{ mb: 1 }}>
-          Theme
-        </Typography>
-        <RadioGroup
-          name="theme"
-          value={currentTheme}
-          onChange={(_event, key) => setTheme(key)}
-          sx={{
-            display: 'grid',
-            gridTemplateColumns: 'repeat(auto-fill, minmax(168px, 1fr))',
-            gap: 1.5,
-          }}
-        >
-          {themes.map((option) => (
-            <FormControlLabel
-              key={option.key}
-              value={option.key}
-              control={<Radio size="small" />}
-              label={
-                <Stack spacing={1} sx={{ pt: 0.75 }}>
-                  <Swatch option={option} dark={dark} />
-                  <Typography variant="body2">{option.label}</Typography>
-                </Stack>
-              }
-              sx={{
-                m: 0,
-                p: 1,
-                pr: 1.5,
-                alignItems: 'flex-start',
-                border: 1,
-                borderRadius: 2,
-                borderColor: option.key === currentTheme ? 'primary.main' : 'divider',
-                '& .MuiFormControlLabel-label': { flex: 1 },
-              }}
-            />
-          ))}
-        </RadioGroup>
-        <Typography variant="body2" color="text.secondary" sx={{ mt: 1.5 }}>
-          Charts keep their colours in every theme: blue for money in, orange for money out and
-          green for what you keep.
-        </Typography>
-
-        <Typography variant="subtitle2" component="h3" sx={{ mt: 3, mb: 1 }}>
-          Light or dark
-        </Typography>
-        <ToggleButtonGroup
-          exclusive
-          size="small"
-          value={mode ?? 'system'}
-          onChange={(_event, next: Mode | null) => {
-            if (next) setMode(next);
-          }}
-          aria-label="Light or dark"
-          sx={{ flexWrap: 'wrap', '& .MuiToggleButton-root': { gap: 0.75, textTransform: 'none' } }}
-        >
-          {MODES.map((item) => (
-            <ToggleButton key={item.id} value={item.id}>
-              {item.icon}
-              {item.label}
-            </ToggleButton>
-          ))}
-        </ToggleButtonGroup>
-
-        <Typography variant="subtitle2" component="h3" sx={{ mt: 3, mb: 0.5 }}>
-          Background
-        </Typography>
-        <FormControlLabel
-          control={
-            <Switch
-              checked={pattern === 'on'}
-              onChange={(event) => setPattern(event.target.checked ? 'on' : 'off')}
-            />
-          }
-          label="Engraved pattern behind the pages, like on a banknote"
-        />
-      </Section>
+      <Title
+        title="Settings"
+        subtitle="Kanakku's settings. Appearance is kept in this browser, the rest in config.yaml."
+      />
+      <Appearance />
+      <SettingsAccounts
+        ledger={ledger}
+        config={config}
+        errors={errors}
+        loaded={loaded}
+        problem={problem}
+      />
     </>
   );
 }

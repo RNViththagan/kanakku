@@ -2,9 +2,12 @@
 import { OxygenUIThemeProvider } from '@wso2/oxygen-ui';
 import { act } from 'react';
 import { createRoot, type Root } from 'react-dom/client';
-import { afterEach, beforeAll, describe, expect, it } from 'vitest';
+import { afterEach, beforeAll, describe, expect, it, vi } from 'vitest';
+import { loadWorld, worldConfig } from '../../core/test/helpers/world';
+import type { Status } from '../src/api';
 import { THEMES } from '../src/appearance';
 import { Settings } from '../src/pages/Settings';
+import { fakeServer } from './helpers/server';
 
 beforeAll(() => {
   Object.assign(globalThis, { IS_REACT_ACT_ENVIRONMENT: true });
@@ -19,16 +22,30 @@ afterEach(() => {
   root = undefined;
   host = undefined;
   localStorage.clear();
+  vi.unstubAllGlobals();
 });
 
+const ledger = loadWorld();
+
 async function show(): Promise<HTMLElement> {
+  fakeServer({
+    'GET /api/config': { body: { config: worldConfig(), errors: [] } },
+    'GET /api/decisions': { body: { decisions: [], unused: [] } },
+  });
   host = document.createElement('div');
   document.body.append(host);
   root = createRoot(host);
   await act(async () => {
     root?.render(
       <OxygenUIThemeProvider themes={THEMES} initialTheme="acrylic-purple">
-        <Settings />
+        <Settings
+          ledger={ledger}
+          status={{} as Status}
+          tidy={[]}
+          route={{ page: 'settings' }}
+          range={{ from: '2026-01-01', to: '2026-02-20' }}
+          rangeLabel="All"
+        />
       </OxygenUIThemeProvider>,
     );
   });

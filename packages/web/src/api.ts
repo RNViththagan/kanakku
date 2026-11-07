@@ -63,13 +63,22 @@ async function request(path: string, init: RequestInit = {}): Promise<Response> 
   return response;
 }
 
-async function readJson<T>(path: string): Promise<T> {
+export async function readJson<T>(path: string): Promise<T> {
   const response = await request(path);
   if (!response.ok) throw new Error(`Kanakku answered ${response.status} for ${path}`);
   return (await response.json()) as T;
 }
 
-async function write(path: string, method: string, value?: unknown): Promise<Response> {
+export class SaveError extends Error {
+  constructor(
+    message: string,
+    readonly status: number,
+  ) {
+    super(message);
+  }
+}
+
+export async function write(path: string, method: string, value?: unknown): Promise<Response> {
   const response = await request(
     path,
     value === undefined
@@ -82,7 +91,7 @@ async function write(path: string, method: string, value?: unknown): Promise<Res
       Array.isArray(body.errors) && body.errors.length > 0 ? body.errors.join('. ') : undefined,
     () => undefined,
   );
-  throw new Error(reason ?? `Kanakku answered ${response.status}`);
+  throw new SaveError(reason ?? `Kanakku answered ${response.status}`, response.status);
 }
 
 export async function saveAnswers(

@@ -13,7 +13,7 @@ import { afterEach, beforeAll, describe, expect, it, vi } from 'vitest';
 import { loadWorld } from '../../core/test/helpers/world';
 import type { Status } from '../src/api';
 import { Needs } from '../src/pages/Needs';
-import { depositWorld } from './helpers/deposits';
+import { asPool, depositWorld } from './helpers/deposits';
 import { button, click, typeInto } from './helpers/dom';
 
 beforeAll(() => {
@@ -207,6 +207,27 @@ describe('answering Needs you', () => {
     await click(button('Add start and principal'));
     expect(document.body.querySelector('input[aria-label="Principal"]')).not.toBeNull();
     expect(document.body.querySelector('input[aria-label="Start"]')).not.toBeNull();
+  });
+
+  it('offers no term for deposits without a number', async () => {
+    serve();
+    const account = 'deposit-combank-3088888888';
+    await show(
+      only(
+        [
+          item({ id: 'n-t', type: 'deposit-details', refs: { account } }),
+          item({
+            id: 'n-b',
+            type: 'deposit-before-statements',
+            refs: { account, date: '2026-03-09' },
+          }),
+        ],
+        asPool(depositWorld(), account),
+      ),
+    );
+    const labels = [...document.body.querySelectorAll('button')].map((item) => item.textContent);
+    expect(labels).not.toContain('Set the term');
+    expect(labels).not.toContain('Add start and principal');
   });
 
   it('links uncategorised spending to the Cash flow drill-down', async () => {

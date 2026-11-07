@@ -16,7 +16,7 @@ import { configErrorText } from './config';
 import { DepositForm } from './DepositForm';
 import { shortDate } from './format';
 import { ACCOUNT_TYPES } from './pages/Accounts';
-import { type DepositRow, depositRows } from './tables';
+import { type DepositRow, depositRows, isPool } from './tables';
 import { Empty, Section } from './ui';
 
 function dateText(date: string | undefined, locale: string): string {
@@ -133,7 +133,7 @@ export function SettingsAccounts({
                             Edit
                           </Button>
                         )}
-                        {deposit ? (
+                        {deposit && !isPool(account) ? (
                           <Button
                             size="small"
                             aria-label={`Term and rate of ${account.name}`}

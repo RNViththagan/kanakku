@@ -13,7 +13,7 @@ import { useState } from 'react';
 import { saveAccount } from './api';
 import { shortDate } from './format';
 import { SaveNote, useSave } from './Saving';
-import type { DepositRow } from './tables';
+import { type DepositRow, isPool } from './tables';
 
 function normalUnits(minor: number, currency: string): string {
   return String(minor / 10 ** minorUnits(currency));
@@ -52,6 +52,7 @@ export function DepositForm({
 }) {
   const { account } = row;
   const { locale } = ledger;
+  const pool = isPool(account);
   const askPrincipal = !row.placed && account.number !== undefined;
   const [start, setStart] = useState(row.start ?? '');
   const [months, setMonths] = useState(account.deposit?.months?.toString() ?? '');
@@ -79,7 +80,12 @@ export function DepositForm({
     tooLate && returnedOn ? `The start must be on or before ${shortDate(returnedOn, locale)}.` : '',
   ].filter(Boolean);
   const ready =
-    startOk && monthsOk && rateOk && principalOk && !tooLate && !save.saving && !save.done;
+    !pool && startOk && monthsOk && rateOk && principalOk && !tooLate && !save.saving && !save.done;
+  const note = pool
+    ? "These deposits have no number in the statements, so Kanakku can't keep their term."
+    : !row.placed && account.number === undefined
+      ? "Add this deposit's number to config.yaml first."
+      : undefined;
 
   const submit = () =>
     save.run(async () => {
@@ -122,9 +128,9 @@ export function DepositForm({
           {askPrincipal ? (
             <NumberField label="Principal" value={principal} onChange={setPrincipal} />
           ) : null}
-          {!row.placed && account.number === undefined ? (
+          {note ? (
             <Typography variant="body2" color="text.secondary">
-              Add this deposit's number to config.yaml first.
+              {note}
             </Typography>
           ) : null}
           {maturity ? (

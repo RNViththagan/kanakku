@@ -5,7 +5,7 @@ import { createRoot, type Root } from 'react-dom/client';
 import { afterEach, beforeAll, describe, expect, it } from 'vitest';
 import type { Status } from '../src/api';
 import { NetWorth } from '../src/pages/NetWorth';
-import { depositWorld } from './helpers/deposits';
+import { asPool, depositWorld } from './helpers/deposits';
 
 beforeAll(() => {
   Object.assign(globalThis, { IS_REACT_ACT_ENVIRONMENT: true });
@@ -97,6 +97,16 @@ describe('NetWorth deposits', () => {
     if (!open) throw new Error('no Term not set button');
     await act(async () => open.click());
     expect(document.body.querySelector('input[aria-label="Months"]')).not.toBeNull();
+  });
+
+  it('offers no term for deposits without a number', () => {
+    const active = section(
+      show(asPool(world, 'deposit-combank-3088888888')),
+      'Active fixed deposits',
+    );
+    const labels = [...active.querySelectorAll('button')].map((item) => item.textContent);
+    expect(labels).not.toContain('Set the term');
+    expect(labels).not.toContain('Term not set');
   });
 
   it('says a deposit may already have matured once that date has passed', () => {

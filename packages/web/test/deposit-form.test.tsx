@@ -5,7 +5,7 @@ import { createRoot, type Root } from 'react-dom/client';
 import { afterEach, beforeAll, describe, expect, it, vi } from 'vitest';
 import { DepositForm } from '../src/DepositForm';
 import { type DepositRow, depositRows } from '../src/tables';
-import { depositWorld } from './helpers/deposits';
+import { asPool, depositWorld } from './helpers/deposits';
 import { button, click, stubSaves, typeInto } from './helpers/dom';
 
 beforeAll(() => {
@@ -106,6 +106,19 @@ describe('DepositForm', () => {
     show(rowOf('fd-nameless'));
     expect(document.body.textContent).toContain("Add this deposit's number to config.yaml first.");
     expect(field('Principal')).toBeNull();
+  });
+
+  it('keeps the term of deposits without a number out of config', async () => {
+    const pool = depositRows(asPool(later, 'deposit-combank-3088888888')).find(
+      (row) => row.account.id === 'deposit-combank-3088888888',
+    );
+    if (!pool) throw new Error('no pool row');
+    show(pool);
+    await typeInto('Months', '12');
+    expect(document.body.textContent).toContain(
+      "These deposits have no number in the statements, so Kanakku can't keep their term.",
+    );
+    expect(button('Save').disabled).toBe(true);
   });
 
   it('refuses a start after the return date', async () => {

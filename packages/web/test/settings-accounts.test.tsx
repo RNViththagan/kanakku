@@ -8,6 +8,7 @@ import { loadWorld, worldConfig } from '../../core/test/helpers/world';
 import type { Status } from '../src/api';
 import { THEMES } from '../src/appearance';
 import { Settings } from '../src/pages/Settings';
+import { asPool } from './helpers/deposits';
 import { button, click, typeInto } from './helpers/dom';
 import { fakeServer } from './helpers/server';
 
@@ -42,7 +43,7 @@ function serve(config: Config | null = withLimit, errors: unknown[] = []) {
   });
 }
 
-async function show(): Promise<HTMLElement> {
+async function show(given: Ledger = ledger): Promise<HTMLElement> {
   const host = document.createElement('div');
   document.body.append(host);
   root = createRoot(host);
@@ -50,7 +51,7 @@ async function show(): Promise<HTMLElement> {
     root?.render(
       <OxygenUIThemeProvider themes={THEMES} initialTheme="acrylic-purple">
         <Settings
-          ledger={ledger}
+          ledger={given}
           status={{} as Status}
           tidy={[]}
           route={{ page: 'settings' }}
@@ -178,6 +179,15 @@ describe('Settings accounts', () => {
     if (!open) throw new Error('no term button');
     await click(open);
     expect(field('Months')).not.toBeNull();
+  });
+
+  it('offers no term for deposits without a number', async () => {
+    serve();
+    const page = await show(asPool(ledger, 'deposit-combank-3099999999'));
+    expect(page.textContent).toContain('Unnamed LKR deposits');
+    expect(
+      page.querySelector('button[aria-label="Term and rate of Unnamed LKR deposits"]'),
+    ).toBeNull();
   });
 
   it('shows config errors instead of forms', async () => {

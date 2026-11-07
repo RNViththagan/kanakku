@@ -14,7 +14,7 @@ import { DepositForm } from '../DepositForm';
 import { money, monthLabel, shortDate, toMajor } from '../format';
 import { hrefFor } from '../routes';
 import { netWorthPoints } from '../series';
-import { type DepositRow, depositRows } from '../tables';
+import { type DepositRow, depositRows, isPool } from '../tables';
 import { Amount, Empty, MoneyArea, Section, Title, useMoneyColors } from '../ui';
 import type { PageProps } from './types';
 
@@ -63,11 +63,12 @@ export function NetWorth({ ledger, range, rangeLabel }: PageProps) {
   const names = new Map(ledger.accounts.map((account) => [account.id, account.name]));
   const colors = useMoneyColors();
   const [editing, setEditing] = useState<DepositRow>();
-  const termButton = (row: DepositRow, label: string) => (
-    <Button size="small" sx={{ p: 0, minWidth: 0 }} onClick={() => setEditing(row)}>
-      {label}
-    </Button>
-  );
+  const termButton = (row: DepositRow, label: string) =>
+    isPool(row.account) ? null : (
+      <Button size="small" sx={{ p: 0, minWidth: 0 }} onClick={() => setEditing(row)}>
+        {label}
+      </Button>
+    );
 
   return (
     <>

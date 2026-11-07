@@ -8,7 +8,7 @@ import { needsByType } from '../model';
 import { hrefFor } from '../routes';
 import { SaveNote, useSave } from '../Saving';
 import { TransferAnswer } from '../TransferAnswer';
-import { type DepositRow, depositRows } from '../tables';
+import { type DepositRow, depositRows, isPool } from '../tables';
 import { Empty, Section, Title } from '../ui';
 import { YourAnswers } from '../YourAnswers';
 import { SEVERITY_COLORS } from './Overview';
@@ -136,7 +136,9 @@ function NeedActions({
   onTerm: (row: DepositRow, returnedOn?: string) => void;
 }) {
   const dismiss = useSave();
-  const deposit = deposits.find((row) => row.account.id === need.refs.account);
+  const deposit = deposits.find(
+    (row) => row.account.id === need.refs.account && !isPool(row.account),
+  );
   const account = ledger.accounts.find((item) => item.id === need.refs.account);
   return (
     <Stack spacing={1}>

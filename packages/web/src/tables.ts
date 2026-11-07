@@ -459,6 +459,10 @@ function depositInterest(ledger: Ledger): Map<string, number> {
   return totals;
 }
 
+export function isPool(account: Account): boolean {
+  return account.discovered === true && account.number === undefined;
+}
+
 export function depositRows(ledger: Ledger): DepositRow[] {
   const interest = depositInterest(ledger);
   const byId = new Map(ledger.accounts.map((account) => [account.id, account]));

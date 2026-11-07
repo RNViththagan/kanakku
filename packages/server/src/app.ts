@@ -1,26 +1,37 @@
 import { timingSafeEqual } from 'node:crypto';
-import { readFileSync, statSync } from 'node:fs';
+import { existsSync, readdirSync, readFileSync, statSync } from 'node:fs';
 import { createServer, type IncomingMessage, type Server, type ServerResponse } from 'node:http';
 import type { AddressInfo } from 'node:net';
 import { extname, isAbsolute, join, relative, resolve, sep } from 'node:path';
 import {
   type AccountEdit,
+  addCategory,
   addDecisions,
   addRule,
   buildLedger,
   type Config,
-  type ConfigEditResult,
   type ConfigError,
   type Decision,
   type DecisionContent,
+  type EditResult,
   type IsoDate,
   type Ledger,
   loadConfig,
+  loadDecisions,
+  moveRule,
   parseDecisionContent,
   planTidy,
+  type RuleChange,
   type RuleEdit,
+  removeCategory,
   removeDecision,
+  removeRule,
+  setGeneral,
+  setNames,
+  setRates,
   type TidyProposal,
+  type UserRule,
+  updateRule,
   upsertAccount,
 } from '@kanakku/core';
 import { loadDataFolder } from './load';
@@ -135,6 +146,21 @@ function readJson(req: IncomingMessage): Promise<unknown> {
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null && !Array.isArray(value);
+}
+
+const STALE = 'The rules changed since this list loaded. It has been refreshed, so try again.';
+const RULE_ROUTE = /^\/api\/config\/rules\/(0|[1-9][0-9]*)(\/remove|\/move)?$/;
+
+function wrongBody(message: string): EditResult {
+  return { errors: [{ path: '', message }] };
+}
+
+function storedRates(dataFolder: string): string[] {
+  const folder = join(dataFolder, 'kanakku', 'rates');
+  if (!existsSync(folder)) return [];
+  return readdirSync(folder, { recursive: true })
+    .map(String)
+    .filter((name) => name.endsWith('.csv'));
 }
 
 function sameToken(given: string | string[] | null | undefined, token: string): boolean {
@@ -320,18 +346,43 @@ export function createApp(options: AppOptions): App {
   async function saveConfig(
     req: IncomingMessage,
     res: ServerResponse,
-    edit: (text: string, body: Record<string, unknown>) => ConfigEditResult,
+    edit: (text: string, body: Record<string, unknown>, config: Config) => EditResult,
   ): Promise<void> {
     const body = await readJson(req);
     if (!isRecord(body)) throw new Refusal(400, ['Send an object']);
     const before = readDataFile(dataFolder, 'config.yaml');
     const loaded = loadConfig(before.replace(/^\uFEFF/, ''));
-    if (loaded.errors.length > 0) throw new Refusal(409, loaded.errors.map(errorText));
-    const result = edit(before, body);
+    if (!loaded.config) throw new Refusal(409, loaded.errors.map(errorText));
+    const result = edit(before, body, loaded.config);
+    if ('stale' in result) throw new Refusal(409, [STALE]);
     if ('errors' in result) throw new Refusal(400, result.errors.map(errorText));
-    writeDataFile(dataFolder, 'config.yaml', result.text, now());
-    rebuild();
+    if (result.text !== before) {
+      writeDataFile(dataFolder, 'config.yaml', result.text, now());
+      rebuild();
+    }
     json(res, 200, {});
+  }
+
+  function ruleRoute(
+    req: IncomingMessage,
+    res: ServerResponse,
+    method: string,
+    index: number,
+    action: string | undefined,
+  ): Promise<void> | void {
+    const wanted = action === undefined ? 'PUT' : 'POST';
+    if (method !== wanted) return text(res, 405, 'Method not allowed');
+    return saveConfig(req, res, (before, body) => {
+      if (!isRecord(body.expect)) return wrongBody('Send the rule as you loaded it in expect');
+      const expect = body.expect as unknown as UserRule;
+      if (action === '/remove') return removeRule(before, index, expect);
+      if (action === '/move') {
+        if (!Number.isInteger(body.to)) return wrongBody('Send to as a whole number');
+        return moveRule(before, index, expect, body.to as number);
+      }
+      if (!isRecord(body.change)) return wrongBody('Send the change in change');
+      return updateRule(before, index, expect, body.change as RuleChange);
+    });
   }
 
   async function api(req: IncomingMessage, res: ServerResponse, url: URL): Promise<void> {
@@ -371,6 +422,82 @@ export function createApp(options: AppOptions): App {
     if (answer?.[1]) {
       if (method !== 'DELETE') return text(res, 405, 'Method not allowed');
       return removeAnswer(res, decodeURIComponent(answer[1]));
+    }
+    if (path === '/api/config') {
+      if (method !== 'GET') return text(res, 405, 'Method not allowed');
+      const loaded = loadConfig(readDataFile(dataFolder, 'config.yaml').replace(/^\uFEFF/, ''));
+      return json(res, 200, { config: loaded.config ?? null, errors: loaded.errors });
+    }
+    const rule = RULE_ROUTE.exec(path);
+    if (rule?.[1] !== undefined) return ruleRoute(req, res, method, Number(rule[1]), rule[2]);
+    if (path === '/api/config/you') {
+      if (method !== 'PUT') return text(res, 405, 'Method not allowed');
+      return saveConfig(req, res, (before, body) => {
+        const { names } = body;
+        if (!Array.isArray(names) || !names.every((name) => typeof name === 'string')) {
+          return wrongBody('Send names as a list of text');
+        }
+        return setNames(before, names);
+      });
+    }
+    if (path === '/api/config/general') {
+      if (method !== 'PUT') return text(res, 405, 'Method not allowed');
+      return saveConfig(req, res, (before, body, config) => {
+        const { homeCurrency, locale } = body;
+        if (homeCurrency !== undefined && typeof homeCurrency !== 'string') {
+          return wrongBody('Send homeCurrency as text');
+        }
+        if (locale !== undefined && typeof locale !== 'string') {
+          return wrongBody('Send locale as text');
+        }
+        if (homeCurrency !== undefined && homeCurrency !== config.homeCurrency) {
+          const stored = storedRates(dataFolder);
+          if (stored.length > 0) {
+            throw new Refusal(409, [
+              `The stored rates in kanakku/rates (${stored.join(', ')}) are in ${config.homeCurrency}. Move them out first.`,
+            ]);
+          }
+        }
+        return setGeneral(before, {
+          ...(homeCurrency !== undefined && { homeCurrency }),
+          ...(locale !== undefined && { locale }),
+        });
+      });
+    }
+    if (path === '/api/config/rates') {
+      if (method !== 'PUT') return text(res, 405, 'Method not allowed');
+      return saveConfig(req, res, (before, body) => {
+        const { manual } = body;
+        if (
+          !isRecord(manual) ||
+          !Object.values(manual).every((value) => value === null || typeof value === 'string')
+        ) {
+          return wrongBody('Send manual rates as text, or null to remove one');
+        }
+        return setRates(before, { manual: manual as Record<string, string | null> });
+      });
+    }
+    if (path === '/api/config/categories') {
+      if (method !== 'POST') return text(res, 405, 'Method not allowed');
+      return saveConfig(req, res, (before, body) => {
+        const { kind, name } = body;
+        if ((kind !== 'income' && kind !== 'spending') || typeof name !== 'string') {
+          return wrongBody('Send kind as income or spending, and name as text');
+        }
+        return addCategory(before, kind, name);
+      });
+    }
+    if (path === '/api/config/categories/remove') {
+      if (method !== 'POST') return text(res, 405, 'Method not allowed');
+      return saveConfig(req, res, (before, body) => {
+        const { name } = body;
+        if (typeof name !== 'string') return wrongBody('Send name as text');
+        const answers = loadDecisions(readDataFile(dataFolder, 'decisions.yaml')).decisions;
+        if (answers.some((answer) => answer.type === 'set' && answer.category === name)) {
+          throw new Refusal(409, [`An answer puts transactions in ${name}. Undo it first.`]);
+        }
+        return removeCategory(before, name);
+      });
     }
     if (path === '/api/config/accounts') {
       if (method !== 'POST') return text(res, 405, 'Method not allowed');

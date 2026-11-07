@@ -513,7 +513,7 @@ The API is JSON under `/api`:
 - `GET views/net-worth`, `views/cash-flow`, `views/spending`, `views/transfers`, with `from`, `to` and `group`.
 - `GET decisions`, `POST decisions` (one answer or a list), `DELETE decisions/:id`.
 - `POST config/accounts` (add an account or change its fields), `POST config/rules` (add a text rule).
-- `GET config`, `PUT config`.
+- `GET config`. Settings changes config with targeted edits that keep comments: `PUT config/rules/:index`, `POST config/rules/:index/remove`, `POST config/rules/:index/move`, `PUT config/you`, `PUT config/general`, `PUT config/rates`, `POST config/categories` and `POST config/categories/remove`. A rule edit carries the rule as it was loaded and is refused when the file changed since.
 - `GET tidy`, `POST tidy/apply`, `POST tidy/undo`.
 - `POST import` (multipart), `POST import/apply`.
 - `POST rates/refresh`.

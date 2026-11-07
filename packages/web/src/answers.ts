@@ -124,6 +124,11 @@ export function ruleText(descriptions: string[]): string {
   return trimmed.length >= 3 ? trimmed : '';
 }
 
+export function transfersTaken(ledger: Ledger, rule: UserRule): number {
+  return ledger.transactions.filter((row) => row.kind === 'transfer' && matchesRule(rule, row))
+    .length;
+}
+
 export function ruleCount(ledger: Ledger, rule: RuleEdit): number {
   const text = rule.match.trim();
   if (text === '') return 0;

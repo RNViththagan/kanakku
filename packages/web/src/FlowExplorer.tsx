@@ -1,4 +1,4 @@
-import type { CurrencyCode, DateRange, Ledger } from '@kanakku/core';
+import type { CurrencyCode, DateRange, Ledger, Transaction } from '@kanakku/core';
 import {
   Box,
   Breadcrumbs,
@@ -10,6 +10,7 @@ import {
   Typography,
 } from '@wso2/oxygen-ui';
 import { type ReactNode, useEffect, useMemo, useRef, useState } from 'react';
+import { CategoryForm } from './CategoryForm';
 import { DRILL_BY, type DrillBy, drillEntries, groupEntries, groupKey, resolveItem } from './drill';
 import { colorOf, FlowChart } from './FlowChart';
 import type { FlowItem, MoneyFlow } from './flow';
@@ -42,6 +43,7 @@ function Row({
   color,
   currency,
   locale,
+  action,
 }: {
   href: string;
   label: string;
@@ -51,6 +53,7 @@ function Row({
   color: string;
   currency: CurrencyCode;
   locale: string;
+  action?: ReactNode;
 }) {
   return (
     <Box>
@@ -68,6 +71,7 @@ function Row({
         </Typography>
       </Stack>
       <ShareBar value={scale > 0 ? (Math.max(value, 0) / scale) * 100 : 0} color={color} />
+      {action}
     </Box>
   );
 }
@@ -126,6 +130,7 @@ export function FlowExplorer({
   const item = query.flow ? resolveItem(flow, query.flow) : undefined;
   const by: DrillBy = item?.kind === 'savings' ? 'month' : isDrillBy(query.by) ? query.by : 'payee';
   const [all, setAll] = useState(false);
+  const [sorting, setSorting] = useState<Transaction[]>();
   const box = useRef<HTMLDivElement>(null);
   const colors = useMoneyColors();
   const names = useMemo(
@@ -226,6 +231,24 @@ export function FlowExplorer({
             note={counted(entry.count)}
             scale={scale}
             color={colorOf(item, colors)}
+            action={
+              item.kind === 'category' && by === 'payee' ? (
+                <Button
+                  size="small"
+                  sx={{ mt: 0.5, px: 0 }}
+                  aria-label={`Categorise all like ${entry.label}`}
+                  onClick={() =>
+                    setSorting(
+                      entries
+                        .filter((found) => groupKey(found.transaction, by) === entry.key)
+                        .map((found) => found.transaction),
+                    )
+                  }
+                >
+                  Categorise all like this
+                </Button>
+              ) : undefined
+            }
             currency={home}
             locale={locale}
           />
@@ -297,6 +320,9 @@ export function FlowExplorer({
         </Stack>
       </Stack>
       {body}
+      {sorting ? (
+        <CategoryForm ledger={ledger} txns={sorting} rule onClose={() => setSorting(undefined)} />
+      ) : null}
     </Box>
   );
 }

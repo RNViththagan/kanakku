@@ -1,5 +1,7 @@
-import { DataGrid, MenuItem, Stack, TextField } from '@wso2/oxygen-ui';
+import { DataGrid, IconButton, MenuItem, Stack, TextField } from '@wso2/oxygen-ui';
+import { Tag } from '@wso2/oxygen-ui-icons-react';
 import { useMemo, useState } from 'react';
+import { CategoryForm, canCategorise } from '../CategoryForm';
 import { money, shortDate } from '../format';
 import { linkRange, type TransactionRow, transactionRows } from '../model';
 import { categoryLabel, categoryOptions, filterTransactions } from '../tables';
@@ -18,10 +20,12 @@ export function TransactionTable({
   rows,
   locale,
   height = 640,
+  onCategorise,
 }: {
   rows: TransactionRow[];
   locale: string;
   height?: number;
+  onCategorise?: (id: string) => void;
 }) {
   const columns: DataGrid.GridColDef<TransactionRow>[] = [
     {
@@ -60,6 +64,25 @@ export function TransactionTable({
     },
     { field: 'files', headerName: 'From files', width: 260 },
   ];
+  if (onCategorise) {
+    columns.unshift({
+      field: 'actions',
+      headerName: '',
+      width: 56,
+      sortable: false,
+      filterable: false,
+      renderCell: ({ row }) =>
+        canCategorise(row) ? (
+          <IconButton
+            size="small"
+            aria-label={`Categorise ${row.description}`}
+            onClick={() => onCategorise(row.id)}
+          >
+            <Tag size={16} />
+          </IconButton>
+        ) : null,
+    });
+  }
   return (
     <div style={{ height, width: '100%' }}>
       <DataGrid.DataGrid
@@ -83,6 +106,8 @@ export function Transactions({ ledger, route, range, rangeLabel }: PageProps) {
   const [kind, setKind] = useState(query.kind ?? '');
   const [category, setCategory] = useState(query.category ?? '');
   const [origin, setOrigin] = useState(query.origin ?? '');
+  const [sorting, setSorting] = useState<string>();
+  const sorted = sorting ? ledger.transactions.find((row) => row.id === sorting) : undefined;
   const linked = linkRange(route.query, range);
   const { from, to } = linked;
   const categories = useMemo(() => categoryOptions(all), [all]);
@@ -157,7 +182,10 @@ export function Transactions({ ledger, route, range, rangeLabel }: PageProps) {
           </TextField>
         </Stack>
       </Section>
-      <TransactionTable rows={rows} locale={locale} />
+      <TransactionTable rows={rows} locale={locale} onCategorise={setSorting} />
+      {sorted ? (
+        <CategoryForm ledger={ledger} txns={[sorted]} onClose={() => setSorting(undefined)} />
+      ) : null}
     </>
   );
 }

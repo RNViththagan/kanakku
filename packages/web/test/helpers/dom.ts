@@ -35,3 +35,21 @@ export function stubSaves(status = 200, body: unknown = { decisions: [], replace
     bodies: () => fetch.mock.calls.map(([, init]) => JSON.parse(String(init?.body ?? 'null'))),
   };
 }
+
+export async function typeInto(label: string, text: string): Promise<void> {
+  const input = document.body.querySelector<HTMLInputElement>(`input[aria-label="${label}"]`);
+  if (!input) throw new Error(`no field "${label}"`);
+  const setter = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value')?.set;
+  await act(async () => {
+    setter?.call(input, text);
+    input.dispatchEvent(new Event('input', { bubbles: true }));
+  });
+}
+
+export function checkbox(label: string): HTMLInputElement {
+  const input = document.body.querySelector<HTMLInputElement>(
+    `input[type="checkbox"][aria-label="${label}"]`,
+  );
+  if (!input) throw new Error(`no checkbox "${label}"`);
+  return input;
+}

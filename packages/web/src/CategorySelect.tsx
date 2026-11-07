@@ -16,12 +16,14 @@ export function CategorySelect({
   onChange,
   label = 'Category',
   none = 'No category',
+  only,
 }: {
   ledger: Ledger;
   value: string;
   onChange: (category: string) => void;
   label?: string;
   none?: string;
+  only?: 'income' | 'spending' | undefined;
 }) {
   return (
     <TextField
@@ -38,20 +40,24 @@ export function CategorySelect({
       sx={{ minWidth: 220 }}
     >
       <option value="">{none}</option>
-      <optgroup label="Income">
-        {ledger.categories.income.map((name) => (
-          <option key={name} value={name}>
-            {name}
-          </option>
-        ))}
-      </optgroup>
-      <optgroup label="Spending">
-        {ledger.categories.spending.map((name) => (
-          <option key={name} value={name}>
-            {name}
-          </option>
-        ))}
-      </optgroup>
+      {only !== 'spending' ? (
+        <optgroup label="Income">
+          {ledger.categories.income.map((name) => (
+            <option key={name} value={name}>
+              {name}
+            </option>
+          ))}
+        </optgroup>
+      ) : null}
+      {only !== 'income' ? (
+        <optgroup label="Spending">
+          {ledger.categories.spending.map((name) => (
+            <option key={name} value={name}>
+              {name}
+            </option>
+          ))}
+        </optgroup>
+      ) : null}
     </TextField>
   );
 }

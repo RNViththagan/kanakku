@@ -6,6 +6,7 @@ import { afterEach, beforeAll, describe, expect, it } from 'vitest';
 import { loadWorld } from '../../core/test/helpers/world';
 import { FlowExplorer } from '../src/FlowExplorer';
 import { moneyFlow } from '../src/flow';
+import { checkbox, click } from './helpers/dom';
 
 beforeAll(() => {
   Object.assign(globalThis, { IS_REACT_ACT_ENVIRONMENT: true });
@@ -100,5 +101,18 @@ describe('FlowExplorer', () => {
 
   it('says so when the flow is not in this range', () => {
     expect(show({ flow: 'nonsense' }).textContent).toContain('Nothing to show');
+  });
+
+  it('offers to categorise a payee group', async () => {
+    const page = show({ flow: 'spending:Fees' });
+    const offer = page.querySelector<HTMLButtonElement>(
+      'button[aria-label="Categorise all like ATM SERVICE CHARGE"]',
+    );
+    if (!offer) throw new Error('no categorise button');
+    await click(offer);
+    expect(checkbox('Also for every transaction whose text contains').checked).toBe(true);
+    expect(
+      document.body.querySelector<HTMLInputElement>('input[aria-label="Text to match"]')?.value,
+    ).toBe('ATM SERVICE CHARGE');
   });
 });

@@ -2,6 +2,8 @@ export { bankPlugins, findBank } from './banks/registry';
 export type * from './banks/types';
 export { matchWording } from './banks/wording';
 export { DEFAULT_CATEGORIES } from './config/defaults';
+export type { AccountEdit, ConfigEditResult, RuleEdit } from './config/edit';
+export { addRule, upsertAccount } from './config/edit';
 export { loadConfig } from './config/load';
 export type { Account, Config, ConfigError, UserRule } from './config/schema';
 export { addDecisions, removeDecision } from './decisions/edit';

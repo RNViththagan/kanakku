@@ -125,8 +125,9 @@ export function ruleText(descriptions: string[]): string {
 }
 
 export function transfersTaken(ledger: Ledger, rule: UserRule): number {
-  return ledger.transactions.filter((row) => row.kind === 'transfer' && matchesRule(rule, row))
-    .length;
+  return ledger.transactions.filter(
+    (row) => row.kind === 'transfer' && row.decidedBy !== 'answer' && matchesRule(rule, row),
+  ).length;
 }
 
 export function ruleCount(ledger: Ledger, rule: RuleEdit): number {

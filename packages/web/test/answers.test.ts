@@ -8,6 +8,7 @@ import {
   ruleCount,
   ruleText,
   transferCandidates,
+  transfersTaken,
 } from '../src/answers';
 
 const ledger = loadWorld();
@@ -117,5 +118,21 @@ describe('ruleText', () => {
   it('counts rows by direction too', () => {
     expect(ruleCount(ledger, { match: 'GROCER', direction: 'in' })).toBe(0);
     expect(ruleCount(ledger, { match: 'GROCER', direction: 'out' })).toBeGreaterThanOrEqual(1);
+  });
+});
+
+describe('transfersTaken', () => {
+  it('counts the transfers a rule would turn into income or spending', () => {
+    expect(transfersTaken(ledger, { match: { text: 'TRF TO' } })).toBe(1);
+  });
+
+  it('leaves out transfers you paired by hand, which a rule cannot take', () => {
+    const paired: Ledger = {
+      ...ledger,
+      transactions: ledger.transactions.map((row) =>
+        row.description.startsWith('TRF TO') ? { ...row, decidedBy: 'answer' as const } : row,
+      ),
+    };
+    expect(transfersTaken(paired, { match: { text: 'TRF TO' } })).toBe(0);
   });
 });

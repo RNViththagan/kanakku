@@ -2,7 +2,6 @@ import type { Config } from '../config/schema';
 import { diffDays } from '../model/dates';
 import { hashText } from '../model/hash';
 import { formatAmount } from '../model/money';
-import type { IsoDate } from '../model/types';
 import { balanceOn, rateBookFor } from '../views/balances';
 import { currentLife, maturityOf, type NeedDraft } from './deposits';
 import type { Ledger, NeedsItem } from './types';

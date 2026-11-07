@@ -1,4 +1,5 @@
 // @vitest-environment happy-dom
+import type { Ledger } from '@kanakku/core';
 import { act } from 'react';
 import { createRoot, type Root } from 'react-dom/client';
 import { afterEach, beforeAll, describe, expect, it } from 'vitest';
@@ -20,9 +21,9 @@ afterEach(() => {
   host = undefined;
 });
 
-const ledger = depositWorld();
+const world = depositWorld();
 
-function show(): HTMLElement {
+function show(ledger: Ledger = world): HTMLElement {
   host = document.createElement('div');
   document.body.append(host);
   root = createRoot(host);
@@ -33,7 +34,7 @@ function show(): HTMLElement {
         status={{} as Status}
         tidy={[]}
         route={{ page: 'net-worth' }}
-        range={{ from: '2026-01-01', to: '2026-03-20' }}
+        range={{ from: '2026-01-01', to: ledger.today }}
         rangeLabel="All"
       />,
     ),
@@ -48,10 +49,8 @@ function section(page: HTMLElement, title: string): HTMLElement {
   return card;
 }
 
-function link(card: HTMLElement, text: string): string | null | undefined {
-  return [...card.querySelectorAll('a')]
-    .find((item) => item.textContent === text)
-    ?.getAttribute('href');
+function link(card: HTMLElement, text: string): HTMLAnchorElement | undefined {
+  return [...card.querySelectorAll('a')].find((item) => item.textContent === text);
 }
 
 describe('NetWorth deposits', () => {
@@ -59,15 +58,37 @@ describe('NetWorth deposits', () => {
     const withdrawn = section(show(), 'Withdrawn fixed deposits');
     expect(withdrawn.textContent).toContain('Matured after 1 month');
     expect(withdrawn.textContent).toContain('Broken early');
-    expect(withdrawn.textContent).toContain('Re-placed as …8888');
-    expect(link(withdrawn, '…8888')).toBe('#/account/deposit-combank-3088888888');
+    expect(withdrawn.textContent).toContain('Replaced by …8888');
+    expect(link(withdrawn, '…8888')?.getAttribute('href')).toBe(
+      '#/account/deposit-combank-3088888888',
+    );
+    expect(link(withdrawn, '…8888')?.getAttribute('aria-label')).toBe('Deposit 003088888888');
+  });
+
+  it('says so when it cannot tell how a deposit ended', () => {
+    const unsure: Ledger = {
+      ...world,
+      depositEndings: world.depositEndings.map((ending) =>
+        ending.account === 'deposit-combank-3077777777'
+          ? { ...ending, how: 'unknown' as const }
+          : ending,
+      ),
+    };
+    expect(section(show(unsure), 'Withdrawn fixed deposits').textContent).toContain('Not known');
   });
 
   it('shows when an active deposit can mature at the earliest and what it replaced', () => {
     const active = section(show(), 'Active fixed deposits');
     expect(active.textContent).toContain('Apr 2, 2026 at the earliest');
-    expect(active.textContent).toContain('Replaced …9999');
-    expect(link(active, '…9999')).toBe('#/account/deposit-combank-3099999999');
-    expect(link(active, 'Set the term')).toBe('#/needs');
+    expect(active.textContent).toContain('Replaces …9999');
+    expect(link(active, '…9999')?.getAttribute('href')).toBe(
+      '#/account/deposit-combank-3099999999',
+    );
+    expect(link(active, 'Set the term')?.getAttribute('href')).toBe('#/needs');
+  });
+
+  it('says a deposit may already have matured once that date has passed', () => {
+    const active = section(show({ ...world, today: '2026-04-10' }), 'Active fixed deposits');
+    expect(active.textContent).toContain('May have matured on Apr 2, 2026');
   });
 });

@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { buildLedger } from '../src/ledger/build';
 import { balanceOn } from '../src/views/balances';
-import { loadWorld, WORLD_TODAY, worldConfig, worldFiles } from './helpers/world';
+import { loadWorld, MARCH_FILE, WORLD_TODAY, worldConfig, worldFiles } from './helpers/world';
 
 const ledger = loadWorld();
 const DEPOSIT = 'deposit-combank-3099999999';
@@ -222,22 +222,8 @@ describe('buildLedger on the fixture world', () => {
   });
 
   it('records how a deposit ended and what replaced it', () => {
-    const march = {
-      path: 'combank/transaction_history_0022222222_20260320.csv',
-      name: 'transaction_history_0022222222_20260320.csv',
-      folderBank: 'combank',
-      text: [
-        ',,,,Transaction History,,,,,,,',
-        ',,,,,,,,,,e-Receipt,',
-        ',Transaction Date,,Description,,Currency,Debit,Credit,Running Balance,,,',
-        ',02/03/2026,,TRF TO: 003088888888 / IBT0000000010 / -,,LKR,"120,000.00",,"10,696.82",,,',
-        ',02/03/2026,,Interest from eFD:3099999999 / - / -,,LKR,,709.32,"130,696.82",,,',
-        ',02/03/2026,,Principal from eFD:3099999999 / - / -,,LKR,,"120,000.00","129,987.50",,,',
-        ',,Generated at 3/20/26 10:00 AM,,,,,,, Page 1 of ,, 1',
-      ].join('\n'),
-    };
     const later = buildLedger({
-      files: [...worldFiles(), march],
+      files: [...worldFiles(), MARCH_FILE],
       config: worldConfig(),
       decisions: [],
       rates: [],
@@ -249,8 +235,34 @@ describe('buildLedger on the fixture world', () => {
         date: '2026-03-02',
         how: 'matured',
         months: 1,
+        due: '2026-03-01',
         replacedBy: ['deposit-combank-3088888888'],
       },
+      { account: 'deposit-combank-3077777777', date: '2026-03-09', how: 'early', replacedBy: [] },
+    ]);
+  });
+
+  it('reminds about a deposit whose term was set without a start, counting from its placement', () => {
+    const config = worldConfig();
+    config.accounts.push({
+      id: 'fd-8888',
+      name: 'FD 8888',
+      bank: 'combank',
+      type: 'fixed-deposit',
+      currency: 'LKR',
+      number: '003088888888',
+      deposit: { months: 1 },
+    });
+    const later = buildLedger({
+      files: [...worldFiles(), MARCH_FILE],
+      config,
+      decisions: [],
+      rates: [],
+      today: '2026-03-30',
+    });
+    const about = later.needs.filter((need) => need.refs.account === 'fd-8888');
+    expect(about.map((need) => [need.type, need.refs.date])).toEqual([
+      ['deposit-maturity', '2026-04-02'],
     ]);
   });
 

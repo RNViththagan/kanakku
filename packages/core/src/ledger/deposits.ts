@@ -1,12 +1,11 @@
 import type { Issue } from '../banks/types';
 import type { Account } from '../config/schema';
 import type { Decision } from '../decisions/load';
-import { diffDays } from '../model/dates';
+import { addMonths, clampDate, diffDays } from '../model/dates';
 import { hashText } from '../model/hash';
 import { decimalToMinor, minorToDecimal } from '../model/money';
 import type { IsoDate } from '../model/types';
 import { maskFits } from './assign';
-import { maturityOf } from './needs';
 import type { Part, Transaction, Transfer } from './types';
 
 export interface NeedDraft {
@@ -28,7 +27,13 @@ export interface DepositEnding {
   date: IsoDate;
   how: 'matured' | 'early' | 'unknown';
   months?: number;
+  due?: IsoDate;
   replacedBy: string[];
+}
+
+export interface DepositLife {
+  start?: IsoDate;
+  principal?: number;
 }
 
 type Event =
@@ -39,6 +44,14 @@ interface Closing {
   ending: DepositEnding;
   day: string;
   principal: number;
+  numbered: boolean;
+}
+
+interface Placement {
+  deposit: string;
+  day: string;
+  amount: number;
+  numbered: boolean;
 }
 
 const EVENT_TAGS = ['deposit-placement', 'deposit-return', 'deposit-closure'] as const;
@@ -47,6 +60,18 @@ const REDEMPTION_INTEREST_SHARE = 0.25;
 
 // A maturity on a weekend or holiday is paid a few days late, or on the working day before.
 const PAYOUT_WINDOW = { before: 2, after: 4 };
+
+export function maturityOf(
+  deposit: { start?: IsoDate; months?: number; maturity?: IsoDate } | undefined,
+) {
+  if (!deposit) return undefined;
+  if (deposit.maturity) return deposit.maturity;
+  if (!deposit.start || !deposit.months) return undefined;
+  const year = Number(deposit.start.slice(0, 4));
+  const month = Number(deposit.start.slice(5, 7));
+  const target = addMonths(year, month, deposit.months);
+  return clampDate(target.year, target.month, Number(deposit.start.slice(8, 10)));
+}
 
 export function numberKey(number: string): string {
   return number.replace(/[\s-]/g, '').replace(/^0+/, '');
@@ -64,6 +89,19 @@ function wholeMonths(start: IsoDate, paid: IsoDate): number | undefined {
     if (paidOnTime(due, paid)) return months;
   }
   return undefined;
+}
+
+export function currentLife(moves: DepositMove[], account: string): DepositLife {
+  const own = moves
+    .filter((move) => move.account === account)
+    .sort((a, b) => (a.date === b.date ? a.amount - b.amount : a.date < b.date ? -1 : 1));
+  let balance = 0;
+  let life: DepositLife = {};
+  for (const move of own) {
+    if (move.amount > 0 && balance <= 0) life = { start: move.date, principal: move.amount };
+    balance += move.amount;
+  }
+  return life;
 }
 
 function namesOwnAccount(row: Transaction, accounts: Account[]): boolean {
@@ -268,25 +306,27 @@ export function trackDeposits(
     }
   };
 
-  const endingOf = (row: Transaction, deposit: Account): Pick<DepositEnding, 'how' | 'months'> => {
-    if (row.tags.includes('deposit-early')) return { how: 'early' };
+  const endingOf = (
+    row: Transaction,
+    deposit: Account,
+  ): Pick<DepositEnding, 'how' | 'months' | 'due'> => {
     const start = deposit.deposit?.start ?? started.get(deposit.id);
-    const due = start && deposit.deposit ? maturityOf({ ...deposit.deposit, start }) : undefined;
-    const onTime = due !== undefined && paidOnTime(due, row.date);
-    const months = onTime
-      ? deposit.deposit?.months
-      : start && deposit.number
-        ? wholeMonths(start, row.date)
-        : undefined;
-    const matured =
-      row.tags.includes('deposit-matured') || onTime || (due === undefined && months !== undefined);
-    if (!matured) {
-      return { how: due !== undefined && diffDays(due, row.date) < 0 ? 'early' : 'unknown' };
+    const agreed = start && deposit.deposit ? maturityOf({ ...deposit.deposit, start }) : undefined;
+    if (agreed && paidOnTime(agreed, row.date)) {
+      const months = deposit.deposit?.months;
+      return months ? { how: 'matured', months, due: agreed } : { how: 'matured', due: agreed };
     }
-    return months ? { how: 'matured', months } : { how: 'matured' };
+    if (row.tags.includes('deposit-early')) return { how: 'early' };
+    const months = start && deposit.number ? wholeMonths(start, row.date) : undefined;
+    const fitted = start && months ? maturityOf({ start, months }) : undefined;
+    if (row.tags.includes('deposit-matured') || (!agreed && fitted)) {
+      return months && fitted ? { how: 'matured', months, due: fitted } : { how: 'matured' };
+    }
+    if (agreed && diffDays(agreed, row.date) < 0) return { how: 'early' };
+    return { how: 'unknown' };
   };
 
-  const placements: Array<{ deposit: string; day: string; amount: number }> = [];
+  const placements: Placement[] = [];
   const closings: Closing[] = [];
   const dayOf = (row: Transaction) => `${row.account}|${row.date}`;
   const recordEnding = (row: Transaction, deposit: Account, principal: number) => {
@@ -294,6 +334,7 @@ export function trackDeposits(
       ending: { account: deposit.id, date: row.date, ...endingOf(row, deposit), replacedBy: [] },
       day: dayOf(row),
       principal,
+      numbered: deposit.number !== undefined,
     });
   };
 
@@ -307,7 +348,7 @@ export function trackDeposits(
     if (row.tags.includes('deposit-placement') && row.amount < 0) {
       const deposit = depositFor(row, row.deposit);
       const amount = -row.amount;
-      if (!started.has(deposit.id)) started.set(deposit.id, row.date);
+      if ((outstanding.get(deposit.id) ?? 0) <= 0) started.set(deposit.id, row.date);
       const configuredPrincipal = deposit.deposit?.principal;
       if (configuredPrincipal !== undefined && configuredPrincipal !== amount) {
         issues.push({
@@ -319,7 +360,12 @@ export function trackDeposits(
         });
       }
       move(deposit.id, row.date, amount);
-      placements.push({ deposit: deposit.id, day: dayOf(row), amount });
+      placements.push({
+        deposit: deposit.id,
+        day: dayOf(row),
+        amount,
+        numbered: deposit.number !== undefined,
+      });
       link(row, deposit, true, amount, [{ kind: 'transfer', category: '', amount: row.amount }]);
     } else if (row.tags.includes('deposit-closure') && row.amount > 0 && row.deposit) {
       const deposit = depositFor(row, row.deposit);
@@ -367,11 +413,15 @@ export function trackDeposits(
     }
   }
 
-  for (const day of new Set(closings.map((closing) => closing.day))) {
-    const open = placements.filter((placement) => placement.day === day);
+  const linkable = closings.filter((closing) => closing.numbered);
+  for (const day of new Set(linkable.map((closing) => closing.day))) {
+    const open = placements.filter((placement) => placement.numbered && placement.day === day);
     const unmatched: Closing[] = [];
-    for (const closing of closings.filter((item) => item.day === day)) {
-      const index = open.findIndex((placement) => placement.amount === closing.principal);
+    for (const closing of linkable.filter((item) => item.day === day)) {
+      const index = open.findIndex(
+        (placement) =>
+          placement.deposit !== closing.ending.account && placement.amount === closing.principal,
+      );
       const [placement] = index < 0 ? [] : open.splice(index, 1);
       if (placement) closing.ending.replacedBy.push(placement.deposit);
       else unmatched.push(closing);
@@ -379,7 +429,7 @@ export function trackDeposits(
     const [lone] = unmatched;
     const [only] = open;
     if (unmatched.length === 1 && open.length === 1 && lone && only) {
-      lone.ending.replacedBy.push(only.deposit);
+      if (only.deposit !== lone.ending.account) lone.ending.replacedBy.push(only.deposit);
     }
   }
 

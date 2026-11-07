@@ -4,6 +4,7 @@ import {
   balanceOn,
   type CoverageSegment,
   type CurrencyCode,
+  currentLife,
   type DateRange,
   diffDays,
   type FileProblem,
@@ -399,9 +400,14 @@ export interface DepositRow {
 
 const STANDARD_TERMS = [1, 3, 6, 12, 24, 36, 48, 60];
 
-function earliestMaturity(start: IsoDate, seen: IsoDate): IsoDate | undefined {
+function paidOn(due: IsoDate): IsoDate {
+  const weekday = new Date(`${due}T00:00:00Z`).getUTCDay();
+  return weekday === 6 ? addDays(due, 2) : weekday === 0 ? addDays(due, 1) : due;
+}
+
+export function earliestMaturity(start: IsoDate, seen: IsoDate): IsoDate | undefined {
   return STANDARD_TERMS.map((months) => maturityOf({ start, months })).find(
-    (due) => due !== undefined && due > seen,
+    (due) => due !== undefined && paidOn(due) > seen,
   );
 }
 
@@ -448,7 +454,7 @@ export function depositRows(ledger: Ledger): DepositRow[] {
       const moves = ledger.depositMoves
         .filter((move) => move.account === account.id)
         .sort((a, b) => (a.date < b.date ? -1 : a.date > b.date ? 1 : 0));
-      const placed = moves.find((move) => move.amount > 0);
+      const life = currentLife(ledger.depositMoves, account.id);
       const out = moves.filter((move) => move.amount < 0);
       const balance = balanceOn(ledger, account.id, ledger.today) ?? 0;
       const withdrawn =
@@ -460,12 +466,15 @@ export function depositRows(ledger: Ledger): DepositRow[] {
         balance,
         interest: interest.get(account.id) ?? 0,
       };
-      const principal = account.deposit?.principal ?? placed?.amount;
+      const principal = account.deposit?.principal ?? life.principal;
       if (principal !== undefined) row.principal = principal;
-      const start = account.deposit?.start ?? placed?.date;
+      const start = account.deposit?.start ?? life.start;
       if (start) row.start = start;
-      const months =
-        (ending?.how === 'matured' ? ending.months : undefined) ?? account.deposit?.months;
+      const months = withdrawn
+        ? ending?.how === 'matured'
+          ? ending.months
+          : undefined
+        : account.deposit?.months;
       if (months) row.months = months;
       const maturity = maturityOf(account.deposit && { ...account.deposit, start });
       if (maturity) row.maturity = maturity;
@@ -494,8 +503,7 @@ export function depositRows(ledger: Ledger): DepositRow[] {
         if (out.length > 0) row.returned = -out.reduce((sum, move) => sum + move.amount, 0);
         const held = start && closed ? diffDays(start, closed) : -1;
         if (held >= 0) row.held = held;
-        const due =
-          row.ended === 'matured' && start && months ? maturityOf({ start, months }) : undefined;
+        const due = row.ended === 'matured' ? ending?.due : undefined;
         const days = due && start ? diffDays(start, due) : held;
         const paidOut = row.returned !== undefined || row.interest > 0;
         if (days > 0 && principal && paidOut) {

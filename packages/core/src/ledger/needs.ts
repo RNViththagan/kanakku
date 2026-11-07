@@ -1,10 +1,10 @@
 import type { Config } from '../config/schema';
-import { addMonths, clampDate, diffDays } from '../model/dates';
+import { diffDays } from '../model/dates';
 import { hashText } from '../model/hash';
 import { formatAmount } from '../model/money';
 import type { IsoDate } from '../model/types';
 import { balanceOn, rateBookFor } from '../views/balances';
-import type { NeedDraft } from './deposits';
+import { currentLife, maturityOf, type NeedDraft } from './deposits';
 import type { Ledger, NeedsItem } from './types';
 
 export const REMINDER_DAYS = 7;
@@ -64,18 +64,6 @@ function item(draft: NeedDraft): NeedsItem {
   };
   if (draft.data) need.data = draft.data;
   return need;
-}
-
-export function maturityOf(
-  deposit: { start?: IsoDate; months?: number; maturity?: IsoDate } | undefined,
-) {
-  if (!deposit) return undefined;
-  if (deposit.maturity) return deposit.maturity;
-  if (!deposit.start || !deposit.months) return undefined;
-  const year = Number(deposit.start.slice(0, 4));
-  const month = Number(deposit.start.slice(5, 7));
-  const target = addMonths(year, month, deposit.months);
-  return clampDate(target.year, target.month, Number(deposit.start.slice(8, 10)));
 }
 
 export function buildNeeds(
@@ -197,7 +185,8 @@ export function buildNeeds(
     if (account.type !== 'fixed-deposit' || account.closed) continue;
     const balance = balanceOn(ledger, account.id, today) ?? 0;
     if (balance <= 0) continue;
-    const maturity = maturityOf(account.deposit);
+    const start = account.deposit?.start ?? currentLife(ledger.depositMoves, account.id).start;
+    const maturity = maturityOf(account.deposit && { ...account.deposit, start });
     if (!maturity) {
       all.push({
         type: 'deposit-details',

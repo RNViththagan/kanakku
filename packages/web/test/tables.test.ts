@@ -9,6 +9,7 @@ import {
   coverageBar,
   type DepositRow,
   depositRows,
+  earliestMaturity,
   fileRows,
   filterTransactions,
   pairLabel,
@@ -469,6 +470,55 @@ describe('depositRows for deposits that ended', () => {
     };
     expect(row(depositRows(termed), '8888')).toMatchObject({ maturity: '2026-09-02', months: 6 });
     expect(row(depositRows(termed), '8888')?.earliest).toBeUndefined();
+  });
+
+  it('does not borrow a config term the payout date contradicts', () => {
+    const contradicted: Ledger = {
+      ...later,
+      accounts: later.accounts.map((account) =>
+        account.id === 'deposit-combank-3099999999'
+          ? { ...account, deposit: { months: 12 } }
+          : account,
+      ),
+      depositEndings: later.depositEndings.map((ending) =>
+        ending.account === 'deposit-combank-3099999999'
+          ? {
+              account: ending.account,
+              date: ending.date,
+              how: 'matured' as const,
+              replacedBy: ending.replacedBy,
+            }
+          : ending,
+      ),
+    };
+    const matured = row(depositRows(contradicted), '9999');
+    expect(matured?.months).toBeUndefined();
+    expect(matured?.yearlyRate).toBeCloseTo((70932 / 12000000) * (365 / 29) * 100, 4);
+  });
+
+  it('counts a deposit paid out and placed again from the new placement', () => {
+    const renewed: Ledger = {
+      ...later,
+      depositMoves: [
+        ...later.depositMoves,
+        { account: 'deposit-combank-3088888888', date: '2026-03-10', amount: 12000000 },
+        { account: 'deposit-combank-3088888888', date: '2026-03-10', amount: -12000000 },
+      ],
+    };
+    expect(row(depositRows(renewed), '8888')).toMatchObject({
+      start: '2026-03-10',
+      earliest: '2026-04-10',
+    });
+  });
+});
+
+describe('earliestMaturity', () => {
+  it('skips a term whose payout the statements would already show', () => {
+    expect(earliestMaturity('2026-03-30', '2026-04-30')).toBe('2026-06-30');
+  });
+
+  it('keeps a term that falls on a weekend, as the bank pays it on the Monday', () => {
+    expect(earliestMaturity('2026-04-02', '2026-05-02')).toBe('2026-05-02');
   });
 });
 

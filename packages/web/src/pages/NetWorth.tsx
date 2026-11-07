@@ -28,7 +28,9 @@ function Linked({ label, accounts }: { label: string; accounts: Account[] | unde
       {accounts.map((account, index) => (
         <Fragment key={account.id}>
           {index > 0 ? ', ' : ''}
-          <Link href={hrefFor({ page: 'account', param: account.id })}>{shortName(account)}</Link>
+          <Link href={hrefFor({ page: 'account', param: account.id })} aria-label={account.name}>
+            {shortName(account)}
+          </Link>
         </Fragment>
       ))}
     </Typography>
@@ -37,7 +39,7 @@ function Linked({ label, accounts }: { label: string; accounts: Account[] | unde
 
 function ending(row: DepositRow): string {
   if (row.ended === 'early') return 'Broken early';
-  if (row.ended !== 'matured') return '';
+  if (row.ended !== 'matured') return 'Not known';
   if (!row.months) return 'Matured';
   return `Matured after ${row.months} ${row.months === 1 ? 'month' : 'months'}`;
 }
@@ -50,7 +52,7 @@ export function NetWorth({ ledger, range, rangeLabel }: PageProps) {
     .filter((row) => row.status === 'active')
     .sort(
       (a, b) =>
-        (a.maturity ?? '9999').localeCompare(b.maturity ?? '9999') ||
+        (a.maturity ?? a.earliest ?? '9999').localeCompare(b.maturity ?? b.earliest ?? '9999') ||
         (a.start ?? '').localeCompare(b.start ?? ''),
     );
   const withdrawn = deposits
@@ -159,7 +161,7 @@ export function NetWorth({ ledger, range, rangeLabel }: PageProps) {
                         <Link href={hrefFor({ page: 'account', param: row.account.id })}>
                           {row.account.name}
                         </Link>
-                        <Linked label="Replaced" accounts={row.replaced} />
+                        <Linked label="Replaces" accounts={row.replaced} />
                       </TableCell>
                       <TableCell align="right">
                         {row.principal === undefined
@@ -172,7 +174,9 @@ export function NetWorth({ ledger, range, rangeLabel }: PageProps) {
                           shortDate(row.maturity, locale)
                         ) : row.earliest ? (
                           <>
-                            {`${shortDate(row.earliest, locale)} at the earliest`}
+                            {row.earliest <= ledger.today
+                              ? `May have matured on ${shortDate(row.earliest, locale)}`
+                              : `${shortDate(row.earliest, locale)} at the earliest`}
                             <Typography variant="caption" component="div">
                               <Link href={hrefFor({ page: 'needs' })}>Set the term</Link>
                             </Typography>
@@ -231,7 +235,7 @@ export function NetWorth({ ledger, range, rangeLabel }: PageProps) {
                         <Link href={hrefFor({ page: 'account', param: row.account.id })}>
                           {row.account.name}
                         </Link>
-                        <Linked label="Re-placed as" accounts={row.replacedBy} />
+                        <Linked label="Replaced by" accounts={row.replacedBy} />
                       </TableCell>
                       <TableCell align="right">
                         {row.principal === undefined

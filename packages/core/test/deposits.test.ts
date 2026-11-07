@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 import type { WordingTag } from '../src/banks/types';
 import type { Account } from '../src/config/schema';
 import type { Decision } from '../src/decisions/load';
-import { trackDeposits } from '../src/ledger/deposits';
+import { currentLife, trackDeposits } from '../src/ledger/deposits';
 import type { Transaction } from '../src/ledger/types';
 
 const savings: Account = {
@@ -295,10 +295,77 @@ describe('trackDeposits', () => {
         date: '2026-04-20',
         how: 'matured',
         months: 1,
+        due: '2026-04-18',
         replacedBy: [],
       },
       { account: 'deposit-combank-3000000103', date: '2026-05-08', how: 'early', replacedBy: [] },
     ]);
+  });
+
+  it('leaves the term empty when the bank pays out off the term in your config', () => {
+    const configured: Account = {
+      id: 'fd',
+      name: 'Deposit',
+      bank: 'combank',
+      type: 'fixed-deposit',
+      currency: 'LKR',
+      number: '003000001001',
+      deposit: { months: 12 },
+    };
+    const result = run(
+      [
+        tx('p', 'cb', '2026-02-01', -12000000, ['deposit-placement'], '003000001001'),
+        tx('m', 'cb', '2026-08-11', 12000000, ['deposit-return', 'deposit-matured'], '3000001001'),
+      ],
+      [savings, configured],
+    );
+    expect(result.endings).toEqual([
+      { account: 'fd', date: '2026-08-11', how: 'matured', replacedBy: [] },
+    ]);
+  });
+
+  it('counts a redemption on the agreed maturity date as matured', () => {
+    const configured: Account = {
+      id: 'fd',
+      name: 'Deposit',
+      bank: 'combank',
+      type: 'fixed-deposit',
+      currency: 'LKR',
+      number: '003000000901',
+      deposit: { months: 1 },
+    };
+    const result = run(
+      [
+        tx('p', 'cb', '2026-02-02', -10000000, ['deposit-placement'], '003000000901'),
+        tx('r', 'cb', '2026-03-02', 10006000, ['deposit-return', 'deposit-early']),
+      ],
+      [savings, configured],
+    );
+    expect(result.endings[0]).toMatchObject({ how: 'matured', months: 1, due: '2026-03-02' });
+  });
+
+  it('counts a deposit renewed under the same number from its new placement, not as its own replacement', () => {
+    const result = run([
+      tx('p', 'cb', '2026-02-02', -10000000, ['deposit-placement'], '003000000701'),
+      tx('m', 'cb', '2026-03-02', 10000000, ['deposit-return', 'deposit-matured'], '3000000701'),
+      tx('again', 'cb', '2026-03-02', -10000000, ['deposit-placement'], '003000000701'),
+      tx('m2', 'cb', '2026-06-02', 10000000, ['deposit-return', 'deposit-matured'], '3000000701'),
+    ]);
+    expect(result.endings.map(({ how, months, replacedBy }) => [how, months, replacedBy])).toEqual([
+      ['matured', 1, []],
+      ['matured', 3, []],
+    ]);
+  });
+
+  it('leaves deposits without a number out of the links', () => {
+    const result = run([
+      tx('r', 'cb', '2026-03-02', 5000001, ['deposit-return', 'deposit-early']),
+      tx('p', 'cb', '2026-03-02', -4500000, ['deposit-placement'], '003000000801'),
+    ]);
+    expect(result.endings[0]).toMatchObject({
+      account: 'deposit-combank-lkr-pool',
+      replacedBy: [],
+    });
   });
 
   it('reads a closure a whole number of months in as matured when the bank does not say', () => {
@@ -394,5 +461,36 @@ describe('trackDeposits', () => {
     expect(result.accounts).toEqual([]);
     expect(result.transfers).toEqual([]);
     expect(result.txns[0]).toBe(paired);
+  });
+});
+
+describe('currentLife', () => {
+  const move = (date: string, amount: number) => ({ account: 'fd', date, amount });
+
+  it('starts from the first placement', () => {
+    expect(currentLife([move('2026-02-01', 100), move('2026-02-10', 50)], 'fd')).toEqual({
+      start: '2026-02-01',
+      principal: 100,
+    });
+  });
+
+  it('starts again when the money goes back in after being paid out, whatever the order that day', () => {
+    const renewed = { start: '2026-03-02', principal: 100 };
+    expect(
+      currentLife(
+        [move('2026-02-01', 100), move('2026-03-02', -100), move('2026-03-02', 100)],
+        'fd',
+      ),
+    ).toEqual(renewed);
+    expect(
+      currentLife(
+        [move('2026-02-01', 100), move('2026-03-02', 100), move('2026-03-02', -100)],
+        'fd',
+      ),
+    ).toEqual(renewed);
+  });
+
+  it('knows nothing of a deposit with no moves', () => {
+    expect(currentLife([move('2026-02-01', 100)], 'other')).toEqual({});
   });
 });

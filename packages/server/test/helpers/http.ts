@@ -45,7 +45,7 @@ export function makeWebRoot(): string {
 }
 
 export async function serve(
-  options: { dataFolder?: string; watch?: boolean; today?: () => string } = {},
+  options: { dataFolder?: string; watch?: boolean; today?: () => string; now?: () => Date } = {},
 ) {
   const app = createApp({
     dataFolder: options.dataFolder ?? world,
@@ -53,6 +53,7 @@ export async function serve(
     token: TOKEN,
     today: options.today ?? (() => '2026-02-20'),
     watch: options.watch,
+    ...(options.now && { now: options.now }),
   });
   await new Promise<void>((done) => app.server.listen(0, '127.0.0.1', done));
   onCleanup(() => app.close());
@@ -73,6 +74,7 @@ export function send(
     headers?: Record<string, string>;
     token?: boolean;
     setHost?: boolean;
+    body?: string;
   } = {},
 ): Promise<Reply> {
   return new Promise((done, fail) => {
@@ -98,7 +100,21 @@ export function send(
       },
     );
     req.on('error', fail);
-    req.end();
+    req.end(options.body);
+  });
+}
+
+export function sendJson(
+  port: number,
+  path: string,
+  method: string,
+  value: unknown,
+  headers: Record<string, string> = {},
+): Promise<Reply> {
+  return send(port, path, {
+    method,
+    body: JSON.stringify(value),
+    headers: { 'content-type': 'application/json', ...headers },
   });
 }
 

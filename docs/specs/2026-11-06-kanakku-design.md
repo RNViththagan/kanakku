@@ -511,7 +511,8 @@ The API is JSON under `/api`:
 - `GET status`: data folder, config errors, last scan.
 - `GET ledger`: accounts, transactions, transfers, conversions, deposits, card cycles, coverage, Needs you and rates.
 - `GET views/net-worth`, `views/cash-flow`, `views/spending`, `views/transfers`, with `from`, `to` and `group`.
-- `POST decisions`, `DELETE decisions/:id`.
+- `GET decisions`, `POST decisions` (one answer or a list), `DELETE decisions/:id`.
+- `POST config/accounts` (add an account or change its fields), `POST config/rules` (add a text rule).
 - `GET config`, `PUT config`.
 - `GET tidy`, `POST tidy/apply`, `POST tidy/undo`.
 - `POST import` (multipart), `POST import/apply`.

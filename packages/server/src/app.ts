@@ -4,15 +4,27 @@ import { createServer, type IncomingMessage, type Server, type ServerResponse } 
 import type { AddressInfo } from 'node:net';
 import { extname, isAbsolute, join, relative, resolve, sep } from 'node:path';
 import {
+  type AccountEdit,
+  addDecisions,
+  addRule,
   buildLedger,
   type Config,
+  type ConfigEditResult,
   type ConfigError,
+  type Decision,
+  type DecisionContent,
   type IsoDate,
   type Ledger,
+  loadConfig,
+  parseDecisionContent,
   planTidy,
+  type RuleEdit,
+  removeDecision,
   type TidyProposal,
+  upsertAccount,
 } from '@kanakku/core';
 import { loadDataFolder } from './load';
+import { readDataFile, writeDataFile } from './save';
 import { type FolderWatch, watchFolders } from './watch';
 
 export interface Status {
@@ -30,6 +42,7 @@ export interface AppState {
   tidy: TidyProposal[];
   status: Status;
   builtAt?: string;
+  decisions: Decision[];
 }
 
 export interface AppOptions {
@@ -37,6 +50,7 @@ export interface AppOptions {
   webRoot: string;
   token: string;
   today: () => IsoDate;
+  now?: () => Date;
   watch?: boolean;
 }
 
@@ -64,6 +78,64 @@ const TYPES: Record<string, string> = {
 
 const NO_STORE = { 'cache-control': 'no-store' };
 const FETCH_SITES = new Set(['same-origin', 'none']);
+const MAX_BODY = 65536;
+const MAX_ANSWERS = 400;
+const READ_ROUTES = new Set(['/api/status', '/api/ledger', '/api/tidy', '/api/events']);
+
+class Refusal extends Error {
+  constructor(
+    readonly status: number,
+    readonly errors: string[],
+    readonly headers: Record<string, string> = {},
+  ) {
+    super(errors.join('. '));
+  }
+}
+
+function errorText(error: ConfigError): string {
+  const where = [error.line === undefined ? '' : `line ${error.line}`, error.path]
+    .filter(Boolean)
+    .join(' ');
+  return where ? `${where}: ${error.message}` : error.message;
+}
+
+function readJson(req: IncomingMessage): Promise<unknown> {
+  const type = req.headers['content-type'] ?? '';
+  if (!/^application\/json\s*(;|$)/i.test(type)) {
+    return Promise.reject(new Refusal(415, ['Send the body as application/json']));
+  }
+  const tooLarge = () =>
+    new Refusal(413, [`The body is larger than ${MAX_BODY} bytes`], { connection: 'close' });
+  if (Number(req.headers['content-length'] ?? 0) > MAX_BODY) return Promise.reject(tooLarge());
+  return new Promise((done, fail) => {
+    const chunks: Buffer[] = [];
+    let size = 0;
+    let refused = false;
+    req.on('data', (chunk: Buffer) => {
+      if (refused) return;
+      size += chunk.length;
+      if (size > MAX_BODY) {
+        refused = true;
+        fail(tooLarge());
+        return;
+      }
+      chunks.push(chunk);
+    });
+    req.on('end', () => {
+      if (refused) return;
+      try {
+        done(JSON.parse(Buffer.concat(chunks).toString('utf8')));
+      } catch {
+        fail(new Refusal(400, ['The body is not valid JSON']));
+      }
+    });
+    req.on('error', fail);
+  });
+}
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === 'object' && value !== null && !Array.isArray(value);
+}
 
 function sameToken(given: string | string[] | null | undefined, token: string): boolean {
   if (typeof given !== 'string') return false;
@@ -106,6 +178,7 @@ function json(res: ServerResponse, status: number, value: unknown): void {
 
 export function createApp(options: AppOptions): App {
   const { dataFolder, token } = options;
+  const now = options.now ?? (() => new Date());
   if (!TOKEN_PATTERN.test(token)) {
     throw new Error('The token must be 16 to 256 letters, digits, _ or -');
   }
@@ -113,6 +186,7 @@ export function createApp(options: AppOptions): App {
   const streams = new Set<ServerResponse>();
   let current: AppState = {
     tidy: [],
+    decisions: [],
     status: {
       dataFolder,
       configPath: join(dataFolder, 'kanakku', 'config.yaml'),
@@ -174,7 +248,13 @@ export function createApp(options: AppOptions): App {
           existing: new Set(contents.files.map((file) => file.path)),
         });
         ledgerJson = JSON.stringify(ledger);
-        current = { ledger, tidy, status, builtAt: new Date().toISOString() };
+        current = {
+          ledger,
+          tidy,
+          status,
+          builtAt: new Date().toISOString(),
+          decisions: contents.decisions,
+        };
       } else {
         current = { ...current, status: { ...status, stale: current.ledger !== undefined } };
       }
@@ -200,27 +280,116 @@ export function createApp(options: AppOptions): App {
     req.on('close', () => streams.delete(res));
   }
 
-  function api(req: IncomingMessage, res: ServerResponse, url: URL) {
-    if (req.method !== 'GET') return text(res, 405, 'Method not allowed');
+  async function saveAnswers(req: IncomingMessage, res: ServerResponse): Promise<void> {
+    const body = await readJson(req);
+    const items = Array.isArray(body) ? body : [body];
+    if (items.length === 0 || items.length > MAX_ANSWERS) {
+      throw new Refusal(400, [`Send from 1 to ${MAX_ANSWERS} answers`]);
+    }
+    const contents: DecisionContent[] = [];
+    const errors: string[] = [];
+    items.forEach((item, index) => {
+      const parsed = parseDecisionContent(item);
+      if ('content' in parsed) contents.push(parsed.content);
+      else {
+        const prefix = items.length > 1 ? `answer ${index + 1}: ` : '';
+        errors.push(...parsed.errors.map((error) => `${prefix}${error}`));
+      }
+    });
+    if (errors.length > 0) throw new Refusal(400, errors);
+    const moment = now();
+    const before = readDataFile(dataFolder, 'decisions.yaml');
+    const result = addDecisions(before, contents, moment.toISOString());
+    if ('errors' in result) throw new Refusal(409, result.errors.map(errorText));
+    if (result.text !== before) writeDataFile(dataFolder, 'decisions.yaml', result.text, moment);
+    rebuild();
+    json(res, 200, { decisions: result.decisions, replaced: result.replaced });
+  }
+
+  function removeAnswer(res: ServerResponse, id: string): void {
+    const before = readDataFile(dataFolder, 'decisions.yaml');
+    const result = removeDecision(before, id);
+    if ('errors' in result) throw new Refusal(409, result.errors.map(errorText));
+    if (!result.removed) throw new Refusal(404, ['No answer has that id']);
+    writeDataFile(dataFolder, 'decisions.yaml', result.text, now());
+    rebuild();
+    res.writeHead(204, NO_STORE);
+    res.end();
+  }
+
+  async function saveConfig(
+    req: IncomingMessage,
+    res: ServerResponse,
+    edit: (text: string, body: Record<string, unknown>) => ConfigEditResult,
+  ): Promise<void> {
+    const body = await readJson(req);
+    if (!isRecord(body)) throw new Refusal(400, ['Send an object']);
+    const before = readDataFile(dataFolder, 'config.yaml');
+    const loaded = loadConfig(before.replace(/^\uFEFF/, ''));
+    if (loaded.errors.length > 0) throw new Refusal(409, loaded.errors.map(errorText));
+    const result = edit(before, body);
+    if ('errors' in result) throw new Refusal(400, result.errors.map(errorText));
+    writeDataFile(dataFolder, 'config.yaml', result.text, now());
+    rebuild();
+    json(res, 200, {});
+  }
+
+  async function api(req: IncomingMessage, res: ServerResponse, url: URL): Promise<void> {
     const site = req.headers['sec-fetch-site'];
     if (site !== undefined && !FETCH_SITES.has(site)) return text(res, 403, 'Forbidden');
     const given =
       req.headers['x-kanakku-token'] ??
       (url.pathname === '/api/events' ? url.searchParams.get('token') : undefined);
     if (!sameToken(given, token)) return text(res, 401, 'Unauthorized');
-    if (url.pathname !== '/api/events' && options.today() !== builtFor) rebuild();
-    switch (url.pathname) {
-      case '/api/status':
-        return json(res, 200, current.status);
-      case '/api/ledger':
-        return ledgerJson ? json(res, 200, ledgerJson) : json(res, 503, current.status);
-      case '/api/tidy':
-        return json(res, 200, current.tidy);
-      case '/api/events':
-        return openEvents(req, res);
-      default:
-        return json(res, 404, { error: 'Not found' });
+    const method = req.method ?? 'GET';
+    const path = url.pathname;
+    if (READ_ROUTES.has(path)) {
+      if (method !== 'GET') return text(res, 405, 'Method not allowed');
+      if (path !== '/api/events' && options.today() !== builtFor) rebuild();
+      switch (path) {
+        case '/api/status':
+          return json(res, 200, current.status);
+        case '/api/ledger':
+          return ledgerJson ? json(res, 200, ledgerJson) : json(res, 503, current.status);
+        case '/api/tidy':
+          return json(res, 200, current.tidy);
+        default:
+          return openEvents(req, res);
+      }
     }
+    if (path === '/api/decisions') {
+      if (method === 'GET') {
+        return json(res, 200, {
+          decisions: current.decisions,
+          unused: current.ledger?.unusedDecisions ?? [],
+        });
+      }
+      if (method === 'POST') return saveAnswers(req, res);
+      return text(res, 405, 'Method not allowed');
+    }
+    const answer = /^\/api\/decisions\/([^/]+)$/.exec(path);
+    if (answer?.[1]) {
+      if (method !== 'DELETE') return text(res, 405, 'Method not allowed');
+      return removeAnswer(res, decodeURIComponent(answer[1]));
+    }
+    if (path === '/api/config/accounts') {
+      if (method !== 'POST') return text(res, 405, 'Method not allowed');
+      return saveConfig(req, res, (before, body) => {
+        if (typeof body.id !== 'string')
+          return { errors: [{ path: 'id', message: 'is required' }] };
+        return upsertAccount(before, body as unknown as AccountEdit);
+      });
+    }
+    if (path === '/api/config/rules') {
+      if (method !== 'POST') return text(res, 405, 'Method not allowed');
+      return saveConfig(req, res, (before, body) => {
+        if (typeof body.match !== 'string') {
+          return { errors: [{ path: 'match', message: 'is required' }] };
+        }
+        return addRule(before, body as unknown as RuleEdit);
+      });
+    }
+    return json(res, 404, { error: 'Not found' });
   }
 
   function serveIndex(res: ServerResponse) {
@@ -260,7 +429,26 @@ export function createApp(options: AppOptions): App {
       return text(res, 403, 'Forbidden');
     }
     const url = new URL(req.url ?? '/', 'http://kanakku.invalid');
-    if (url.pathname === '/api' || url.pathname.startsWith('/api/')) return api(req, res, url);
+    if (url.pathname === '/api' || url.pathname.startsWith('/api/')) {
+      api(req, res, url).catch((problem: unknown) => {
+        if (res.headersSent) return res.destroy();
+        if (problem instanceof Refusal) {
+          reply(
+            res,
+            problem.status,
+            JSON.stringify({ errors: problem.errors }),
+            'application/json; charset=utf-8',
+            {
+              ...NO_STORE,
+              ...problem.headers,
+            },
+          );
+          return;
+        }
+        text(res, 500, 'Something went wrong');
+      });
+      return;
+    }
     if (req.method !== 'GET' && req.method !== 'HEAD') return text(res, 405, 'Method not allowed');
     return serveStatic(res, url.pathname);
   }

@@ -221,6 +221,39 @@ describe('buildLedger on the fixture world', () => {
     expect(need?.refs.file).toBe(boc.path);
   });
 
+  it('records how a deposit ended and what replaced it', () => {
+    const march = {
+      path: 'combank/transaction_history_0022222222_20260320.csv',
+      name: 'transaction_history_0022222222_20260320.csv',
+      folderBank: 'combank',
+      text: [
+        ',,,,Transaction History,,,,,,,',
+        ',,,,,,,,,,e-Receipt,',
+        ',Transaction Date,,Description,,Currency,Debit,Credit,Running Balance,,,',
+        ',02/03/2026,,TRF TO: 003088888888 / IBT0000000010 / -,,LKR,"120,000.00",,"10,696.82",,,',
+        ',02/03/2026,,Interest from eFD:3099999999 / - / -,,LKR,,709.32,"130,696.82",,,',
+        ',02/03/2026,,Principal from eFD:3099999999 / - / -,,LKR,,"120,000.00","129,987.50",,,',
+        ',,Generated at 3/20/26 10:00 AM,,,,,,, Page 1 of ,, 1',
+      ].join('\n'),
+    };
+    const later = buildLedger({
+      files: [...worldFiles(), march],
+      config: worldConfig(),
+      decisions: [],
+      rates: [],
+      today: '2026-03-20',
+    });
+    expect(later.depositEndings).toEqual([
+      {
+        account: DEPOSIT,
+        date: '2026-03-02',
+        how: 'matured',
+        months: 1,
+        replacedBy: ['deposit-combank-3088888888'],
+      },
+    ]);
+  });
+
   it('is plain data', () => {
     expect(JSON.parse(JSON.stringify(ledger))).toEqual(ledger);
   });

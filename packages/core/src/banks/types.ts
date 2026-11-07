@@ -68,7 +68,9 @@ export type WordingTag =
   | 'deposit-placement'
   | 'deposit-return'
   | 'deposit-interest'
-  | 'deposit-closure';
+  | 'deposit-closure'
+  | 'deposit-matured'
+  | 'deposit-early';
 
 export interface WordingRule {
   tag: WordingTag;

@@ -10,7 +10,7 @@ export { buildLedger } from './ledger/build';
 export type { CardCycle } from './ledger/cards';
 export { cycleFor, dueDateFor, owedOn } from './ledger/cards';
 export type { AccountCoverage, CoverageSegment } from './ledger/coverage';
-export type { DepositMove, NeedDraft } from './ledger/deposits';
+export type { DepositEnding, DepositMove, NeedDraft } from './ledger/deposits';
 export { numberKey } from './ledger/deposits';
 export { detectFormat } from './ledger/detect';
 export { maturityOf } from './ledger/needs';

@@ -124,9 +124,12 @@ describe('ComBank wording', () => {
       tags: ['deposit-placement'],
       deposit: '003012345678',
     });
-    expect(match('IB Time Redemption Deposit', 'in').tags).toEqual(['deposit-return']);
+    expect(match('IB Time Redemption Deposit', 'in').tags).toEqual([
+      'deposit-return',
+      'deposit-early',
+    ]);
     expect(match('Principal from eFD:003012345678', 'in')).toEqual({
-      tags: ['deposit-return'],
+      tags: ['deposit-return', 'deposit-matured'],
       deposit: '003012345678',
     });
     expect(match('Interest from eFD:003012345678', 'in')).toEqual({

@@ -279,6 +279,112 @@ describe('trackDeposits', () => {
     expect(result.txns[0]?.tags).not.toContain('deposit-placement');
   });
 
+  it('says how a deposit ended from the bank wording, with the term it ran', () => {
+    const result = run([
+      tx('p1', 'cb', '2026-02-02', -10000000, ['deposit-placement'], '003000000101'),
+      tx('p2', 'cb', '2026-03-18', -8000000, ['deposit-placement'], '003000000102'),
+      tx('m1', 'cb', '2026-03-19', 10000000, ['deposit-return', 'deposit-matured'], '3000000101'),
+      tx('m2', 'cb', '2026-04-20', 8000000, ['deposit-return', 'deposit-matured'], '3000000102'),
+      tx('p3', 'cb', '2026-05-04', -30000000, ['deposit-placement'], '003000000103'),
+      tx('e3', 'cb', '2026-05-08', 30000001, ['deposit-return', 'deposit-early']),
+    ]);
+    expect(result.endings).toEqual([
+      { account: 'deposit-combank-3000000101', date: '2026-03-19', how: 'matured', replacedBy: [] },
+      {
+        account: 'deposit-combank-3000000102',
+        date: '2026-04-20',
+        how: 'matured',
+        months: 1,
+        replacedBy: [],
+      },
+      { account: 'deposit-combank-3000000103', date: '2026-05-08', how: 'early', replacedBy: [] },
+    ]);
+  });
+
+  it('reads a closure a whole number of months in as matured when the bank does not say', () => {
+    const result = run([
+      tx('p1', 'usd', '2026-01-12', -200000, ['deposit-placement'], '900000000201', 'USD'),
+      tx('p2', 'usd', '2026-02-10', -100000, ['deposit-placement'], '900000000202', 'USD'),
+      tx('c2', 'usd', '2026-03-17', 100400, ['deposit-closure'], '900000000202', 'USD'),
+      tx('c1', 'usd', '2026-04-14', 202000, ['deposit-closure'], '900000000201', 'USD'),
+    ]);
+    expect(result.endings.map(({ account, how, months }) => [account, how, months])).toEqual([
+      ['deposit-hnb-900000000202', 'unknown', undefined],
+      ['deposit-hnb-900000000201', 'matured', 3],
+    ]);
+  });
+
+  it('trusts the term in your config over the dates', () => {
+    const configured = (id: string, number: string): Account => ({
+      id,
+      name: id,
+      bank: 'hnb',
+      type: 'fixed-deposit',
+      currency: 'USD',
+      number,
+      deposit: { months: 6 },
+    });
+    const result = run(
+      [
+        tx('p1', 'usd', '2026-01-15', -200000, ['deposit-placement'], '900000000301', 'USD'),
+        tx('p2', 'usd', '2026-01-15', -100000, ['deposit-placement'], '900000000302', 'USD'),
+        tx('c1', 'usd', '2026-04-15', 201000, ['deposit-closure'], '900000000301', 'USD'),
+        tx('c2', 'usd', '2026-07-15', 102000, ['deposit-closure'], '900000000302', 'USD'),
+      ],
+      [savings, usd, configured('fd1', '900000000301'), configured('fd2', '900000000302')],
+    );
+    expect(result.endings.map(({ account, how, months }) => [account, how, months])).toEqual([
+      ['fd1', 'early', undefined],
+      ['fd2', 'matured', 6],
+    ]);
+  });
+
+  it('links each deposit to the one placed with the same amount that day', () => {
+    const result = run([
+      tx('a', 'cb', '2026-05-04', -30000000, ['deposit-placement'], '003000000401'),
+      tx('b', 'cb', '2026-05-04', -20000000, ['deposit-placement'], '003000000402'),
+      tx('b2', 'cb', '2026-05-08', -20000000, ['deposit-placement'], '003000000404'),
+      tx('rb', 'cb', '2026-05-08', 20000001, ['deposit-return', 'deposit-early']),
+      tx('a2', 'cb', '2026-05-08', -30000000, ['deposit-placement'], '003000000403'),
+      tx('ra', 'cb', '2026-05-08', 30000001, ['deposit-return', 'deposit-early']),
+    ]);
+    expect(result.endings.map((ending) => [ending.account, ending.replacedBy])).toEqual([
+      ['deposit-combank-3000000402', ['deposit-combank-3000000404']],
+      ['deposit-combank-3000000401', ['deposit-combank-3000000403']],
+    ]);
+  });
+
+  it('links a lone deposit to a lone placement that day, whatever the amounts', () => {
+    const result = run([
+      tx('a', 'cb', '2026-06-01', -10000000, ['deposit-placement'], '003000000501'),
+      tx('r', 'cb', '2026-06-24', 10005671, ['deposit-return', 'deposit-early']),
+      tx('b', 'cb', '2026-06-24', -45000000, ['deposit-placement'], '003000000502'),
+    ]);
+    expect(result.endings[0]?.replacedBy).toEqual(['deposit-combank-3000000502']);
+  });
+
+  it('does not guess between placements, or link across days or accounts', () => {
+    const second: Account = {
+      id: 'cb2',
+      name: 'Second',
+      bank: 'combank',
+      type: 'savings',
+      currency: 'LKR',
+    };
+    const result = run(
+      [
+        tx('a', 'cb', '2026-03-02', -12000000, ['deposit-placement'], '003000000601'),
+        tx('m', 'cb', '2026-04-02', 12000000, ['deposit-return', 'deposit-matured'], '3000000601'),
+        tx('b', 'cb', '2026-04-02', -40000000, ['deposit-placement'], '003000000602'),
+        tx('c', 'cb', '2026-04-02', -35000000, ['deposit-placement'], '003000000603'),
+        tx('d', 'cb', '2026-04-03', -12000000, ['deposit-placement'], '003000000604'),
+        tx('e', 'cb2', '2026-04-02', -12000000, ['deposit-placement'], '003000000605'),
+      ],
+      [savings, usd, second],
+    );
+    expect(result.endings[0]?.replacedBy).toEqual([]);
+  });
+
   it('skips rows that are already in a transfer', () => {
     const paired = {
       ...tx('p', 'cb', '2026-03-29', -10000000, ['deposit-placement'], '003012345678'),

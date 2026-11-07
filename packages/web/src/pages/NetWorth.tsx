@@ -1,3 +1,4 @@
+import type { Account } from '@kanakku/core';
 import {
   Link,
   Table,
@@ -7,13 +8,39 @@ import {
   TableRow,
   Typography,
 } from '@wso2/oxygen-ui';
-import { useMemo } from 'react';
+import { Fragment, useMemo } from 'react';
 import { money, monthLabel, shortDate, toMajor } from '../format';
 import { hrefFor } from '../routes';
 import { netWorthPoints } from '../series';
-import { depositRows } from '../tables';
+import { type DepositRow, depositRows } from '../tables';
 import { Amount, Empty, MoneyArea, Section, Title } from '../ui';
 import type { PageProps } from './types';
+
+function shortName(account: Account): string {
+  return account.number ? `…${account.number.slice(-4)}` : account.name;
+}
+
+function Linked({ label, accounts }: { label: string; accounts: Account[] | undefined }) {
+  if (!accounts) return null;
+  return (
+    <Typography variant="caption" color="text.secondary" component="div">
+      {`${label} `}
+      {accounts.map((account, index) => (
+        <Fragment key={account.id}>
+          {index > 0 ? ', ' : ''}
+          <Link href={hrefFor({ page: 'account', param: account.id })}>{shortName(account)}</Link>
+        </Fragment>
+      ))}
+    </Typography>
+  );
+}
+
+function ending(row: DepositRow): string {
+  if (row.ended === 'early') return 'Broken early';
+  if (row.ended !== 'matured') return '';
+  if (!row.months) return 'Matured';
+  return `Matured after ${row.months} ${row.months === 1 ? 'month' : 'months'}`;
+}
 
 export function NetWorth({ ledger, range, rangeLabel }: PageProps) {
   const { homeCurrency: home, locale } = ledger;
@@ -130,6 +157,7 @@ export function NetWorth({ ledger, range, rangeLabel }: PageProps) {
                         <Link href={hrefFor({ page: 'account', param: row.account.id })}>
                           {row.account.name}
                         </Link>
+                        <Linked label="Replaced" accounts={row.replaced} />
                       </TableCell>
                       <TableCell align="right">
                         {row.principal === undefined
@@ -140,6 +168,13 @@ export function NetWorth({ ledger, range, rangeLabel }: PageProps) {
                       <TableCell>
                         {row.maturity ? (
                           shortDate(row.maturity, locale)
+                        ) : row.earliest ? (
+                          <>
+                            {`${shortDate(row.earliest, locale)} at the earliest`}
+                            <Typography variant="caption" component="div">
+                              <Link href={hrefFor({ page: 'needs' })}>Set the term</Link>
+                            </Typography>
+                          </>
                         ) : (
                           <Link href={hrefFor({ page: 'needs' })}>Term not set</Link>
                         )}
@@ -181,6 +216,7 @@ export function NetWorth({ ledger, range, rangeLabel }: PageProps) {
                     <TableCell align="right">Principal</TableCell>
                     <TableCell>Opened</TableCell>
                     <TableCell>Withdrawn</TableCell>
+                    <TableCell>How it ended</TableCell>
                     <TableCell align="right">Days held</TableCell>
                     <TableCell align="right">Interest</TableCell>
                     <TableCell align="right">Yearly rate</TableCell>
@@ -193,6 +229,7 @@ export function NetWorth({ ledger, range, rangeLabel }: PageProps) {
                         <Link href={hrefFor({ page: 'account', param: row.account.id })}>
                           {row.account.name}
                         </Link>
+                        <Linked label="Re-placed as" accounts={row.replacedBy} />
                       </TableCell>
                       <TableCell align="right">
                         {row.principal === undefined
@@ -201,6 +238,7 @@ export function NetWorth({ ledger, range, rangeLabel }: PageProps) {
                       </TableCell>
                       <TableCell>{row.start ? shortDate(row.start, locale) : ''}</TableCell>
                       <TableCell>{row.closed ? shortDate(row.closed, locale) : ''}</TableCell>
+                      <TableCell>{ending(row)}</TableCell>
                       <TableCell align="right">{row.held ?? ''}</TableCell>
                       <TableCell align="right">
                         {row.returned === undefined && row.interest === 0 ? (

@@ -1,10 +1,12 @@
 import type { Issue } from '../banks/types';
 import type { Account } from '../config/schema';
 import type { Decision } from '../decisions/load';
+import { diffDays } from '../model/dates';
 import { hashText } from '../model/hash';
 import { decimalToMinor, minorToDecimal } from '../model/money';
 import type { IsoDate } from '../model/types';
 import { maskFits } from './assign';
+import { maturityOf } from './needs';
 import type { Part, Transaction, Transfer } from './types';
 
 export interface NeedDraft {
@@ -21,16 +23,47 @@ export interface DepositMove {
   amount: number;
 }
 
+export interface DepositEnding {
+  account: string;
+  date: IsoDate;
+  how: 'matured' | 'early' | 'unknown';
+  months?: number;
+  replacedBy: string[];
+}
+
 type Event =
   | { kind: 'seed'; date: IsoDate; account: Account; principal: number }
   | { kind: 'row'; date: IsoDate; index: number; row: Transaction };
+
+interface Closing {
+  ending: DepositEnding;
+  day: string;
+  principal: number;
+}
 
 const EVENT_TAGS = ['deposit-placement', 'deposit-return', 'deposit-closure'] as const;
 
 const REDEMPTION_INTEREST_SHARE = 0.25;
 
+// A maturity on a weekend or holiday is paid a few days late, or on the working day before.
+const PAYOUT_WINDOW = { before: 2, after: 4 };
+
 export function numberKey(number: string): string {
   return number.replace(/[\s-]/g, '').replace(/^0+/, '');
+}
+
+function paidOnTime(due: IsoDate, paid: IsoDate): boolean {
+  const late = diffDays(due, paid);
+  return late >= -PAYOUT_WINDOW.before && late <= PAYOUT_WINDOW.after;
+}
+
+function wholeMonths(start: IsoDate, paid: IsoDate): number | undefined {
+  for (let months = 1; months <= 120; months += 1) {
+    const due = maturityOf({ start, months });
+    if (!due || diffDays(due, paid) < -PAYOUT_WINDOW.before) return undefined;
+    if (paidOnTime(due, paid)) return months;
+  }
+  return undefined;
 }
 
 function namesOwnAccount(row: Transaction, accounts: Account[]): boolean {
@@ -66,6 +99,7 @@ export function trackDeposits(
   issues: Issue[];
   needs: NeedDraft[];
   moves: DepositMove[];
+  endings: DepositEnding[];
 } {
   const txns = input.map((row) =>
     row.decidedBy === undefined && namesOwnAccount(row, ctx.accounts) ? asTransferHint(row) : row,
@@ -234,6 +268,35 @@ export function trackDeposits(
     }
   };
 
+  const endingOf = (row: Transaction, deposit: Account): Pick<DepositEnding, 'how' | 'months'> => {
+    if (row.tags.includes('deposit-early')) return { how: 'early' };
+    const start = deposit.deposit?.start ?? started.get(deposit.id);
+    const due = start && deposit.deposit ? maturityOf({ ...deposit.deposit, start }) : undefined;
+    const onTime = due !== undefined && paidOnTime(due, row.date);
+    const months = onTime
+      ? deposit.deposit?.months
+      : start && deposit.number
+        ? wholeMonths(start, row.date)
+        : undefined;
+    const matured =
+      row.tags.includes('deposit-matured') || onTime || (due === undefined && months !== undefined);
+    if (!matured) {
+      return { how: due !== undefined && diffDays(due, row.date) < 0 ? 'early' : 'unknown' };
+    }
+    return months ? { how: 'matured', months } : { how: 'matured' };
+  };
+
+  const placements: Array<{ deposit: string; day: string; amount: number }> = [];
+  const closings: Closing[] = [];
+  const dayOf = (row: Transaction) => `${row.account}|${row.date}`;
+  const recordEnding = (row: Transaction, deposit: Account, principal: number) => {
+    closings.push({
+      ending: { account: deposit.id, date: row.date, ...endingOf(row, deposit), replacedBy: [] },
+      day: dayOf(row),
+      principal,
+    });
+  };
+
   for (const event of events) {
     if (event.kind === 'seed') {
       started.set(event.account.id, event.date);
@@ -256,6 +319,7 @@ export function trackDeposits(
         });
       }
       move(deposit.id, row.date, amount);
+      placements.push({ deposit: deposit.id, day: dayOf(row), amount });
       link(row, deposit, true, amount, [{ kind: 'transfer', category: '', amount: row.amount }]);
     } else if (row.tags.includes('deposit-closure') && row.amount > 0 && row.deposit) {
       const deposit = depositFor(row, row.deposit);
@@ -279,6 +343,7 @@ export function trackDeposits(
       principal = Math.min(principal, row.amount);
       const interest = row.amount - principal;
       move(deposit.id, row.date, -Math.min(principal, available));
+      recordEnding(row, deposit, principal);
       const parts: Part[] = [{ kind: 'transfer', category: '', amount: principal }];
       if (interest > 0) parts.push({ kind: 'income', category: 'Interest', amount: interest });
       link(row, deposit, false, principal, parts);
@@ -293,11 +358,28 @@ export function trackDeposits(
       const deposit = exact ?? close?.deposit ?? depositFor(row, undefined);
       const principal = close?.principal ?? row.amount;
       takeOut(deposit, row, principal);
+      recordEnding(row, deposit, principal);
       const parts: Part[] = [{ kind: 'transfer', category: '', amount: principal }];
       if (row.amount > principal) {
         parts.push({ kind: 'income', category: 'Interest', amount: row.amount - principal });
       }
       link(row, deposit, false, principal, parts);
+    }
+  }
+
+  for (const day of new Set(closings.map((closing) => closing.day))) {
+    const open = placements.filter((placement) => placement.day === day);
+    const unmatched: Closing[] = [];
+    for (const closing of closings.filter((item) => item.day === day)) {
+      const index = open.findIndex((placement) => placement.amount === closing.principal);
+      const [placement] = index < 0 ? [] : open.splice(index, 1);
+      if (placement) closing.ending.replacedBy.push(placement.deposit);
+      else unmatched.push(closing);
+    }
+    const [lone] = unmatched;
+    const [only] = open;
+    if (unmatched.length === 1 && open.length === 1 && lone && only) {
+      lone.ending.replacedBy.push(only.deposit);
     }
   }
 
@@ -308,5 +390,6 @@ export function trackDeposits(
     issues,
     needs,
     moves,
+    endings: closings.map((closing) => closing.ending),
   };
 }

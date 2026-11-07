@@ -390,6 +390,19 @@ export interface DepositRow {
   returned?: number;
   held?: number;
   yearlyRate?: number;
+  ended?: 'matured' | 'early';
+  months?: number;
+  earliest?: IsoDate;
+  replaced?: Account[];
+  replacedBy?: Account[];
+}
+
+const STANDARD_TERMS = [1, 3, 6, 12, 24, 36, 48, 60];
+
+function earliestMaturity(start: IsoDate, seen: IsoDate): IsoDate | undefined {
+  return STANDARD_TERMS.map((months) => maturityOf({ start, months })).find(
+    (due) => due !== undefined && due > seen,
+  );
 }
 
 function depositInterest(ledger: Ledger): Map<string, number> {
@@ -425,9 +438,13 @@ function depositInterest(ledger: Ledger): Map<string, number> {
 
 export function depositRows(ledger: Ledger): DepositRow[] {
   const interest = depositInterest(ledger);
+  const byId = new Map(ledger.accounts.map((account) => [account.id, account]));
+  const resolve = (ids: string[]) => ids.flatMap((id) => byId.get(id) ?? []);
   return ledger.accounts
     .filter((account) => account.type === 'fixed-deposit')
     .map((account) => {
+      const endings = ledger.depositEndings.filter((item) => item.account === account.id);
+      const ending = endings.at(-1);
       const moves = ledger.depositMoves
         .filter((move) => move.account === account.id)
         .sort((a, b) => (a.date < b.date ? -1 : a.date > b.date ? 1 : 0));
@@ -447,19 +464,42 @@ export function depositRows(ledger: Ledger): DepositRow[] {
       if (principal !== undefined) row.principal = principal;
       const start = account.deposit?.start ?? placed?.date;
       if (start) row.start = start;
-      const maturity = maturityOf(account.deposit);
+      const months =
+        (ending?.how === 'matured' ? ending.months : undefined) ?? account.deposit?.months;
+      if (months) row.months = months;
+      const maturity = maturityOf(account.deposit && { ...account.deposit, start });
       if (maturity) row.maturity = maturity;
       if (maturity && !withdrawn) row.daysLeft = Math.max(0, diffDays(ledger.today, maturity));
       if (account.deposit?.rate !== undefined) row.rate = account.deposit.rate;
+      const replaced = resolve(
+        ledger.depositEndings
+          .filter((item) => item.replacedBy.includes(account.id))
+          .map((item) => item.account),
+      );
+      if (replaced.length > 0) row.replaced = replaced;
+      const replacedBy = resolve(endings.flatMap((item) => item.replacedBy));
+      if (replacedBy.length > 0) row.replacedBy = replacedBy;
+      if (!withdrawn && !maturity && start) {
+        const source = ledger.transfers.find(
+          (transfer) => transfer.rule === 'deposit' && transfer.to === account.id,
+        )?.from;
+        const seen = source ? ledger.coverage[source]?.lastCovered : undefined;
+        const earliest = seen ? earliestMaturity(start, seen) : undefined;
+        if (earliest) row.earliest = earliest;
+      }
       if (withdrawn) {
         const closed = out.at(-1)?.date ?? account.closed;
         if (closed) row.closed = closed;
+        if (ending && ending.how !== 'unknown') row.ended = ending.how;
         if (out.length > 0) row.returned = -out.reduce((sum, move) => sum + move.amount, 0);
         const held = start && closed ? diffDays(start, closed) : -1;
         if (held >= 0) row.held = held;
+        const due =
+          row.ended === 'matured' && start && months ? maturityOf({ start, months }) : undefined;
+        const days = due && start ? diffDays(start, due) : held;
         const paidOut = row.returned !== undefined || row.interest > 0;
-        if (held > 0 && principal && paidOut) {
-          row.yearlyRate = (row.interest / principal) * (365 / held) * 100;
+        if (days > 0 && principal && paidOut) {
+          row.yearlyRate = (row.interest / principal) * (365 / days) * 100;
         }
       }
       return row;

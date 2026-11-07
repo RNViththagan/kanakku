@@ -5,7 +5,7 @@ import type { CurrencyCode, IsoDate, Kind } from '../model/types';
 import type { RateQuote } from '../rates/types';
 import type { CardCycle } from './cards';
 import type { AccountCoverage } from './coverage';
-import type { DepositMove, NeedDraft } from './deposits';
+import type { DepositEnding, DepositMove, NeedDraft } from './deposits';
 import type { Conversion } from './valuation';
 
 export interface Part {
@@ -106,6 +106,7 @@ export interface Ledger {
   cards: Record<string, CardCycle[]>;
   closings: Record<string, Array<{ date: IsoDate; balance: number }>>;
   depositMoves: DepositMove[];
+  depositEndings: DepositEnding[];
   needs: NeedsItem[];
   issues: Issue[];
   rates: { source: string; stored: RateQuote[]; manual: Record<CurrencyCode, string> };

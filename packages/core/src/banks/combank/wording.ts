@@ -7,6 +7,8 @@ export const combankWording: WordingRule[] = [
   { tag: 'deposit-placement', pattern: /^TRF TO:\s*(?<deposit>\d{9,})/i, direction: 'out' },
   { tag: 'deposit-return', pattern: /^IB Time Redemption Deposit/i, direction: 'in' },
   { tag: 'deposit-return', pattern: /^Principal from eFD:?\s*(?<deposit>\d+)?/i, direction: 'in' },
+  { tag: 'deposit-early', pattern: /^IB Time Redemption Deposit/i, direction: 'in' },
+  { tag: 'deposit-matured', pattern: /^Principal from eFD/i, direction: 'in' },
   { tag: 'deposit-interest', pattern: /^Interest from eFD:?\s*(?<deposit>\d+)?/i, direction: 'in' },
   { tag: 'opening-deposit', pattern: /^INITIAL DEP/i, direction: 'in' },
   {

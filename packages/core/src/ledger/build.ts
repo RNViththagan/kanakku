@@ -448,6 +448,7 @@ export function buildLedger(input: LedgerInput): Ledger {
     cards,
     closings,
     depositMoves: deposits.moves,
+    depositEndings: deposits.endings,
     issues,
     rates: { source: config.rates.source, stored: input.rates, manual: config.rates.manual },
   };

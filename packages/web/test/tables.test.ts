@@ -1,4 +1,4 @@
-import type { Ledger } from '@kanakku/core';
+import type { Account, Ledger } from '@kanakku/core';
 import { describe, expect, it } from 'vitest';
 import { loadWorld } from '../../core/test/helpers/world';
 import { transactionRows } from '../src/model';
@@ -7,6 +7,7 @@ import {
   categoryOptions,
   conversionSummary,
   coverageBar,
+  type DepositRow,
   depositRows,
   fileRows,
   filterTransactions,
@@ -16,6 +17,7 @@ import {
   transferRows,
   transfersOnTab,
 } from '../src/tables';
+import { depositWorld } from './helpers/deposits';
 
 const ledger = loadWorld();
 const range = { from: '2026-01-01', to: '2026-02-20' };
@@ -282,6 +284,7 @@ describe('depositRows', () => {
         balance: 12000000,
         principal: 12000000,
         start: '2026-02-01',
+        earliest: '2026-03-01',
         interest: 0,
       },
     ]);
@@ -413,6 +416,59 @@ describe('depositRows', () => {
       rate: 9,
       daysLeft: 346,
     });
+  });
+});
+
+describe('depositRows for deposits that ended', () => {
+  const later = depositWorld();
+  const rows = depositRows(later);
+  const row = (list: DepositRow[], number: string) =>
+    list.find((item) => item.account.number?.endsWith(number));
+  const ids = (accounts: Account[] | undefined) => accounts?.map((account) => account.id);
+
+  it('says how each one ended and works the rate out over the term', () => {
+    expect(row(rows, '9999')).toMatchObject({
+      status: 'withdrawn',
+      ended: 'matured',
+      months: 1,
+      held: 29,
+      interest: 70932,
+    });
+    expect(row(rows, '9999')?.yearlyRate).toBeCloseTo(7.71, 2);
+    expect(row(rows, '7777')).toMatchObject({ status: 'withdrawn', ended: 'early', held: 4 });
+    expect(row(rows, '7777')?.months).toBeUndefined();
+  });
+
+  it('links a deposit and the one that replaced it, both ways', () => {
+    expect(ids(row(rows, '9999')?.replacedBy)).toEqual(['deposit-combank-3088888888']);
+    expect(ids(row(rows, '8888')?.replaced)).toEqual(['deposit-combank-3099999999']);
+    expect(row(rows, '7777')?.replacedBy).toBeUndefined();
+    expect(row(rows, '7777')?.replaced).toBeUndefined();
+  });
+
+  it('gives the earliest date a deposit without a term can mature', () => {
+    expect(row(rows, '8888')).toMatchObject({ status: 'active', earliest: '2026-04-02' });
+    expect(row(rows, '8888')?.maturity).toBeUndefined();
+    const coverage = later.coverage['cb-savings'];
+    if (!coverage) throw new Error('fixture coverage missing');
+    const seenLater: Ledger = {
+      ...later,
+      coverage: { ...later.coverage, 'cb-savings': { ...coverage, lastCovered: '2026-04-10' } },
+    };
+    expect(row(depositRows(seenLater), '8888')?.earliest).toBe('2026-06-02');
+  });
+
+  it('counts a term from when the deposit was placed once you set it', () => {
+    const termed: Ledger = {
+      ...later,
+      accounts: later.accounts.map((account) =>
+        account.id === 'deposit-combank-3088888888'
+          ? { ...account, deposit: { months: 6 } }
+          : account,
+      ),
+    };
+    expect(row(depositRows(termed), '8888')).toMatchObject({ maturity: '2026-09-02', months: 6 });
+    expect(row(depositRows(termed), '8888')?.earliest).toBeUndefined();
   });
 });
 

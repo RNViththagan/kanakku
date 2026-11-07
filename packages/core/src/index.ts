@@ -4,8 +4,14 @@ export { matchWording } from './banks/wording';
 export { DEFAULT_CATEGORIES } from './config/defaults';
 export { loadConfig } from './config/load';
 export type { Account, Config, ConfigError, UserRule } from './config/schema';
+export { addDecisions, removeDecision } from './decisions/edit';
 export type { Decision, DecisionContent, DecisionType } from './decisions/load';
-export { decisionId, loadDecisions, serializeDecisions } from './decisions/load';
+export {
+  decisionId,
+  loadDecisions,
+  parseDecisionContent,
+  serializeDecisions,
+} from './decisions/load';
 export { buildLedger } from './ledger/build';
 export type { CardCycle } from './ledger/cards';
 export { cycleFor, dueDateFor, owedOn } from './ledger/cards';

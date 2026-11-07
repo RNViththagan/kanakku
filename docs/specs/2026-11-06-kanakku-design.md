@@ -321,6 +321,7 @@ Answers you give in the app are saved in `kanakku/decisions.yaml`. Each answer h
 | `file-account` | This file (by content hash) belongs to this account. |
 | `pair` | These two transactions are a transfer. |
 | `not-transfer` | This transaction is not a transfer, or this automatic pair is wrong. |
+| `transfer` | This transaction went to or came from this account of mine, which has no matching line. |
 | `set` | This transaction's kind, category or both. |
 | `counterparty` | This name or number in descriptions is one of my accounts, or is not. |
 | `fd-principal` | The principal of this deposit. |

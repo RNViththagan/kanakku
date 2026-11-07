@@ -16,6 +16,7 @@ export type Decision = Base &
     | { type: 'file-account'; file: string; account: string }
     | { type: 'pair'; out: string; in: string }
     | { type: 'not-transfer'; txn: string; with?: string }
+    | { type: 'transfer'; txn: string; account: string }
     | { type: 'set'; txn: string; kind?: Kind; category?: string }
     | { type: 'counterparty'; text: string; mine: boolean; account?: string }
     | { type: 'fd-principal'; deposit: string; principal: string }
@@ -47,6 +48,7 @@ const schemas: Record<DecisionType, z.ZodType> = {
     txn: text,
     with: text.optional(),
   }),
+  transfer: z.strictObject({ ...base, type: z.literal('transfer'), txn: text, account: text }),
   set: z
     .strictObject({
       ...base,
@@ -87,6 +89,48 @@ function canonical(value: unknown): string {
 
 export function decisionId(content: DecisionContent): string {
   return hashText(canonical(content));
+}
+
+function valueAt(value: unknown, path: PropertyKey[]): unknown {
+  let current = value;
+  for (const key of path) {
+    if (current === null || typeof current !== 'object') return undefined;
+    current = (current as Record<PropertyKey, unknown>)[key];
+  }
+  return current;
+}
+
+export function parseDecisionContent(
+  value: unknown,
+): { content: DecisionContent } | { errors: string[] } {
+  if (value === null || typeof value !== 'object' || Array.isArray(value)) {
+    return { errors: ['answer: must be an object'] };
+  }
+  const record = value as Record<string, unknown>;
+  const meta = (['id', 'at'] as const).filter((key) => key in record);
+  if (meta.length > 0) return { errors: meta.map((key) => `${key}: is set by Kanakku`) };
+  const type = record.type;
+  if (typeof type !== 'string' || !TYPES.includes(type as DecisionType)) {
+    return { errors: [`type: must be one of ${TYPES.join(', ')}`] };
+  }
+  const parsed = schemas[type as DecisionType].safeParse({ ...record, id: 'id', at: 'at' });
+  if (!parsed.success) {
+    return {
+      errors: parsed.error.issues.flatMap((issue) =>
+        issue.code === 'unrecognized_keys'
+          ? issue.keys.map((key) => `${key}: is not a known field`)
+          : [
+              `${issue.path.map(String).join('.') || 'answer'}: ${
+                issue.path.length > 0 && valueAt(record, issue.path) === undefined
+                  ? 'is required'
+                  : issue.message
+              }`,
+            ],
+      ),
+    };
+  }
+  const { id: _id, at: _at, ...content } = parsed.data as Decision;
+  return { content: content as DecisionContent };
 }
 
 export function loadDecisions(text: string): { decisions: Decision[]; errors: ConfigError[] } {

@@ -145,6 +145,17 @@ describe('Settings accounts', () => {
     ]);
   });
 
+  it('takes a limit typed with commas', async () => {
+    const server = serve();
+    const page = await show();
+    await edit(page, 'ComBank Card');
+    await typeInto('Limit', '250,000');
+    await click(button('Save'));
+    expect(server.sent('POST', '/api/config/accounts')).toEqual([
+      { id: 'cb-card', card: { limit: 250000 } },
+    ]);
+  });
+
   it('refuses a closed date before the opened date', async () => {
     serve();
     const page = await show();

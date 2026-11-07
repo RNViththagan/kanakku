@@ -3,7 +3,7 @@ import { Box, Button, Chip, Link, Stack, TextField, Typography } from '@wso2/oxy
 import { useMemo, useState } from 'react';
 import { saveAnswers } from '../api';
 import { DepositForm } from '../DepositForm';
-import { money, shortDate } from '../format';
+import { money, plainAmount, shortDate } from '../format';
 import { needsByType } from '../model';
 import { hrefFor } from '../routes';
 import { SaveNote, useSave } from '../Saving';
@@ -92,7 +92,7 @@ function PrincipalQuestion({ need }: { need: NeedsItem }) {
   const deposit = need.refs.account ?? '';
   const [principal, setPrincipal] = useState('');
   const save = useSave();
-  const decimal = principal.replace(/,/g, '').trim();
+  const decimal = plainAmount(principal);
   const valid = /^\d+(\.\d+)?$/.test(decimal) && Number(decimal) > 0;
   return (
     <Stack spacing={1}>

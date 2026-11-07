@@ -102,6 +102,17 @@ describe('DepositForm', () => {
     ]);
   });
 
+  it('takes a principal typed with commas', async () => {
+    const saves = stubSaves(200, {});
+    show(rowOf('fd-old'));
+    await typeInto('Principal', '600,000');
+    await typeInto('Months', '12');
+    await click(button('Save'));
+    expect(saves.bodies()).toEqual([
+      { id: 'fd-old', deposit: { start: '2025-12-01', months: 12, principal: 600000 } },
+    ]);
+  });
+
   it('asks for the number first when the deposit has none', () => {
     show(rowOf('fd-nameless'));
     expect(document.body.textContent).toContain("Add this deposit's number to config.yaml first.");

@@ -11,7 +11,7 @@ import {
 } from '@wso2/oxygen-ui';
 import { useState } from 'react';
 import { saveAccount } from './api';
-import { shortDate } from './format';
+import { plainAmount, shortDate } from './format';
 import { SaveNote, useSave } from './Saving';
 import { type DepositRow, isPool } from './tables';
 
@@ -66,7 +66,7 @@ export function DepositForm({
   const monthsOk = /^\d+$/.test(months.trim()) && monthCount > 0;
   const rateValue = Number(rate);
   const rateOk = rate.trim() === '' || (Number.isFinite(rateValue) && rateValue >= 0);
-  const principalValue = Number(principal);
+  const principalValue = Number(plainAmount(principal));
   const principalOk =
     !askPrincipal ||
     (principal.trim() !== '' && Number.isFinite(principalValue) && principalValue > 0);

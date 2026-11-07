@@ -12,6 +12,7 @@ import {
 } from '@wso2/oxygen-ui';
 import { useState } from 'react';
 import { saveAccount } from './api';
+import { plainAmount } from './format';
 import { SaveNote, useSave } from './Saving';
 
 function Field({
@@ -63,6 +64,7 @@ export function AccountForm({ account, onClose }: { account: Account; onClose: (
   const [confirming, setConfirming] = useState(false);
   const save = useSave();
 
+  const limitValue = Number(plainAmount(limit));
   const problems = [
     name.trim() === '' ? 'The name must not be empty.' : '',
     opened && closed && closed < opened
@@ -70,7 +72,7 @@ export function AccountForm({ account, onClose }: { account: Account; onClose: (
       : '',
     card && !isDay(statementDay) ? 'The statement day must be from 1 to 31.' : '',
     card && !isDay(dueDay) ? 'The due day must be from 1 to 31.' : '',
-    card && limit.trim() !== '' && !(Number.isFinite(Number(limit)) && Number(limit) >= 0)
+    card && limit.trim() !== '' && !(Number.isFinite(limitValue) && limitValue >= 0)
       ? 'The limit must be 0 or more.'
       : '',
   ].filter(Boolean);
@@ -86,7 +88,7 @@ export function AccountForm({ account, onClose }: { account: Account; onClose: (
       changes.statementDay = Number(statementDay);
     }
     if (dueDay !== String(account.card?.dueDay ?? '')) changes.dueDay = Number(dueDay);
-    if (limit.trim() !== shownLimit) changes.limit = limit.trim() === '' ? null : Number(limit);
+    if (limit.trim() !== shownLimit) changes.limit = limit.trim() === '' ? null : limitValue;
     if (Object.keys(changes).length > 0) edit.card = changes;
   }
   const clearsNumber = account.number !== undefined && number.trim() === '';

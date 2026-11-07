@@ -4,6 +4,10 @@ export function money(minor: number, currency: CurrencyCode, locale: string): st
   return `${formatAmount(minor, currency, locale)} ${currency}`;
 }
 
+export function plainAmount(text: string): string {
+  return text.replace(/,/g, '').trim();
+}
+
 export function toMajor(minor: number, currency: CurrencyCode): number {
   return minor / 10 ** minorUnits(currency);
 }

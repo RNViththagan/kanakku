@@ -1,4 +1,4 @@
-import type { Ledger } from '@kanakku/core';
+import { decisionId, type Ledger } from '@kanakku/core';
 import {
   Alert,
   Box,
@@ -21,10 +21,11 @@ import {
 } from '@wso2/oxygen-ui';
 import { ChevronDown, ChevronRight, Search } from '@wso2/oxygen-ui-icons-react';
 import { Fragment, useMemo, useState } from 'react';
-import { saveAnswers } from '../api';
+import { removeAnswer, saveAnswers } from '../api';
 import { CategorySelect } from '../CategorySelect';
 import { money, shortDate } from '../format';
 import { hrefFor } from '../routes';
+import { SaveNote, useSave } from '../Saving';
 import { notTransfer, TransferAnswer } from '../TransferAnswer';
 import {
   isOpenTransfer,
@@ -122,7 +123,73 @@ function Details({ row, ledger }: { row: TransferRow; ledger: Ledger }) {
         {reasonOf(row)}
         {row.fee > 0 ? ` The bank kept ${money(row.fee, row.currency, locale)} as a fee.` : ''}
       </Typography>
-      {isOpenTransfer(row) ? <TransferAnswer ledger={ledger} txnId={row.id} /> : null}
+      <TransferActions row={row} ledger={ledger} />
+    </Stack>
+  );
+}
+
+function TransferActions({ row, ledger }: { row: TransferRow; ledger: Ledger }) {
+  const save = useSave();
+  if (isOpenTransfer(row)) return <TransferAnswer ledger={ledger} txnId={row.id} />;
+  if (row.rule === 'deposit') {
+    return (
+      <Typography variant="caption" color="text.secondary">
+        Deposit transfers come from the bank text.
+      </Typography>
+    );
+  }
+  const out = row.sides.find((side) => side.amount < 0);
+  const into = row.sides.find((side) => side.amount > 0);
+  const buttons: Array<{ label: string; act: () => Promise<unknown> }> = [];
+  if (row.rule === 'answer') {
+    const id =
+      out && into
+        ? decisionId({ type: 'pair', out: out.id, in: into.id })
+        : out && row.to
+          ? decisionId({ type: 'transfer', txn: out.id, account: row.to })
+          : into && row.from
+            ? decisionId({ type: 'transfer', txn: into.id, account: row.from })
+            : undefined;
+    if (id) buttons.push({ label: 'Undo', act: () => removeAnswer(id) });
+  } else if (out && into) {
+    buttons.push({
+      label: 'Wrong pair',
+      act: () => saveAnswers([{ type: 'not-transfer', txn: out.id, with: into.id }]),
+    });
+    buttons.push({
+      label: 'Not a transfer',
+      act: () =>
+        saveAnswers([
+          { type: 'not-transfer', txn: out.id },
+          { type: 'not-transfer', txn: into.id },
+        ]),
+    });
+  } else {
+    const only = out ?? into;
+    if (only) {
+      buttons.push({
+        label: 'Not a transfer',
+        act: () => saveAnswers([{ type: 'not-transfer', txn: only.id }]),
+      });
+    }
+  }
+  if (buttons.length === 0) return null;
+  return (
+    <Stack spacing={1}>
+      <Stack direction="row" spacing={1}>
+        {buttons.map((item) => (
+          <Button
+            key={item.label}
+            size="small"
+            variant="outlined"
+            disabled={save.saving}
+            onClick={() => void save.run(item.act)}
+          >
+            {item.label}
+          </Button>
+        ))}
+      </Stack>
+      <SaveNote error={save.error} done={save.done} />
     </Stack>
   );
 }

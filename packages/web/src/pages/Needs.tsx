@@ -2,6 +2,7 @@ import { Chip, Stack, Typography } from '@wso2/oxygen-ui';
 import { useMemo } from 'react';
 import { needsByType } from '../model';
 import { Empty, Section, Title } from '../ui';
+import { YourAnswers } from '../YourAnswers';
 import { SEVERITY_COLORS } from './Overview';
 import type { PageProps } from './types';
 
@@ -36,6 +37,7 @@ export function Needs({ ledger }: PageProps) {
           </Stack>
         </Section>
       ))}
+      <YourAnswers ledger={ledger} />
     </>
   );
 }

@@ -1,5 +1,5 @@
 // @vitest-environment happy-dom
-import type { Ledger, NeedsItem, Transaction } from '@kanakku/core';
+import { decisionId, type Ledger, type NeedsItem, type Transaction } from '@kanakku/core';
 import { act } from 'react';
 import { createRoot, type Root } from 'react-dom/client';
 import { afterEach, beforeAll, describe, expect, it, vi } from 'vitest';
@@ -132,5 +132,68 @@ describe('answering possible transfers', () => {
   it('moves a dismissed possible transfer out of the Needs you tab', () => {
     const page = show(undefined, flagged(picked.slice(0, 1)));
     expect(page.textContent).toContain('Needs you (1)');
+  });
+});
+
+describe('fixing transfers', () => {
+  const matched = ledger.transfers.find(
+    (transfer) => transfer.from === 'boc-main' && transfer.to === 'cb-savings',
+  );
+  if (!matched?.out || !matched.in) throw new Error('fixture transfer missing');
+  const { out, in: into } = matched;
+  const open = async (pair: string, given: Ledger = ledger) => {
+    const page = show({ pair }, given);
+    await click(
+      page.querySelector<HTMLButtonElement>(
+        'button[aria-label="Show details"]',
+      ) as HTMLButtonElement,
+    );
+    return page;
+  };
+
+  it('undoes a pairing you made', async () => {
+    const saves = stubSaves(204, '');
+    const answered: Ledger = {
+      ...ledger,
+      transfers: ledger.transfers.map((transfer) =>
+        transfer.id === matched.id
+          ? { ...transfer, rule: 'answer' as const, status: 'confirmed' as const }
+          : transfer,
+      ),
+    };
+    await open('boc-main|cb-savings', answered);
+    await click(button('Undo'));
+    expect(saves.fetch.mock.calls[0]?.[0]).toBe(
+      `/api/decisions/${decisionId({ type: 'pair', out, in: into })}`,
+    );
+    expect(saves.fetch.mock.calls[0]?.[1]?.method).toBe('DELETE');
+  });
+
+  it('fixes a wrong automatic pair', async () => {
+    const saves = stubSaves();
+    await open('boc-main|cb-savings');
+    await click(button('Wrong pair'));
+    expect(saves.bodies()).toEqual([[{ type: 'not-transfer', txn: out, with: into }]]);
+  });
+
+  it('says an automatic match is not a transfer for both rows', async () => {
+    const saves = stubSaves();
+    await open('boc-main|cb-savings');
+    await click(button('Not a transfer'));
+    expect(saves.bodies()).toEqual([
+      [
+        { type: 'not-transfer', txn: out },
+        { type: 'not-transfer', txn: into },
+      ],
+    ]);
+  });
+
+  it('offers no undo on a deposit transfer', async () => {
+    stubSaves();
+    const page = await open('cb-savings|deposits:combank');
+    expect(page.textContent).toContain('Deposit transfers come from the bank text.');
+    const labels = [...document.body.querySelectorAll('button')].map((item) => item.textContent);
+    expect(labels).not.toContain('Undo');
+    expect(labels).not.toContain('Not a transfer');
   });
 });

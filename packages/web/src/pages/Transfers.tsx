@@ -22,7 +22,7 @@ import {
 import { ChevronDown, ChevronRight, Search } from '@wso2/oxygen-ui-icons-react';
 import { Fragment, useMemo, useState } from 'react';
 import { removeAnswer, saveAnswers } from '../api';
-import { CategorySelect } from '../CategorySelect';
+import { CategorySelect, kindOfCategory } from '../CategorySelect';
 import { money, shortDate } from '../format';
 import { hrefFor } from '../routes';
 import { SaveNote, useSave } from '../Saving';
@@ -206,7 +206,19 @@ function BulkBar({
   const [category, setCategory] = useState('');
   const [saving, setSaving] = useState(false);
   const [result, setResult] = useState<{ ok: boolean; text: string }>();
-  const contents = chosen.flatMap((txn) => notTransfer(ledger, txn, category));
+  const amounts = useMemo(
+    () => new Map(ledger.transactions.map((row) => [row.id, row.amount])),
+    [ledger],
+  );
+  const kind = kindOfCategory(ledger, category);
+  const fits = (txn: string) => {
+    const amount = amounts.get(txn) ?? 0;
+    return kind === 'income' ? amount > 0 : amount < 0;
+  };
+  const contents = chosen.flatMap((txn) => notTransfer(ledger, txn, fits(txn) ? category : ''));
+  const unfit = kind ? chosen.filter((txn) => !fits(txn)).length : 0;
+  const other = kind === 'income' ? 'outgoing' : 'incoming';
+  const leftOff = unfit === 1 ? `the ${other} row` : `the ${unfit} ${other} rows`;
   const tooMany = contents.length > MAX_ANSWERS;
   const save = async () => {
     setSaving(true);
@@ -243,6 +255,11 @@ function BulkBar({
             </Typography>
           ) : null}
         </Stack>
+      ) : null}
+      {unfit > 0 ? (
+        <Typography variant="caption" color="text.secondary">
+          {`${category} is ${kind === 'income' ? 'an income' : 'a spending'} category, so it is left off ${leftOff}.`}
+        </Typography>
       ) : null}
       {result ? <Alert severity={result.ok ? 'success' : 'error'}>{result.text}</Alert> : null}
     </Stack>

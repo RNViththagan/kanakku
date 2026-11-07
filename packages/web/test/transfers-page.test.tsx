@@ -6,7 +6,7 @@ import { afterEach, beforeAll, describe, expect, it, vi } from 'vitest';
 import { loadWorld } from '../../core/test/helpers/world';
 import type { Status } from '../src/api';
 import { Transfers } from '../src/pages/Transfers';
-import { button, click, stubSaves } from './helpers/dom';
+import { button, choose, click, stubSaves } from './helpers/dom';
 
 beforeAll(() => {
   Object.assign(globalThis, { IS_REACT_ACT_ENVIRONMENT: true });
@@ -101,23 +101,25 @@ describe('answering possible transfers', () => {
     refs: { account: row.account, txns: [row.id], date: row.date },
     actions: [],
   });
-  const flagged = (asked: Transaction[]): Ledger => ({
+  const flagged = (asked: Transaction[], rows: Transaction[] = picked): Ledger => ({
     ...ledger,
     transactions: ledger.transactions.map((row) =>
-      picked.some((item) => item.id === row.id) ? { ...row, flag: 'possible' as const } : row,
+      rows.some((item) => item.id === row.id) ? { ...row, flag: 'possible' as const } : row,
     ),
     needs: [...ledger.needs, ...asked.map(need)],
   });
+  const choices = (page: HTMLElement) =>
+    [...page.querySelectorAll<HTMLInputElement>('input[type="checkbox"]')].filter(
+      (box) =>
+        box.getAttribute('aria-label')?.startsWith('Choose ') &&
+        box.getAttribute('aria-label') !== 'Choose all',
+    );
 
   it('marks the checked rows as not transfers', async () => {
     expect(picked).toHaveLength(2);
     const saves = stubSaves();
     const page = show(undefined, flagged(picked));
-    const boxes = [...page.querySelectorAll<HTMLInputElement>('input[type="checkbox"]')].filter(
-      (box) =>
-        box.getAttribute('aria-label')?.startsWith('Choose ') &&
-        box.getAttribute('aria-label') !== 'Choose all',
-    );
+    const boxes = choices(page);
     expect(boxes).toHaveLength(2);
     for (const box of boxes) await click(box);
     expect(page.textContent).toContain('Mark 2 as not transfers');
@@ -127,6 +129,32 @@ describe('answering possible transfers', () => {
     ]);
     expect(saves.bodies()[0]).toHaveLength(2);
     expect(page.textContent).toContain('2 saved');
+  });
+
+  it('puts the category only on checked rows going its way', async () => {
+    const incoming = ledger.transactions.find(
+      (row) => row.account === 'boc-main' && row.amount > 0 && row.transfer === undefined,
+    );
+    const [outgoing] = picked;
+    if (!incoming || !outgoing) throw new Error('fixture rows missing');
+    expect(ledger.categories.spending).toContain('Rent');
+    const saves = stubSaves();
+    const both = [outgoing, incoming];
+    const page = show(undefined, flagged(both, both));
+    for (const box of choices(page)) await click(box);
+    await choose('Their category', 'Rent');
+    expect(page.textContent).toContain(
+      'Rent is a spending category, so it is left off the incoming row.',
+    );
+    await click(button('Save'));
+    expect(saves.bodies()[0]).toEqual(
+      expect.arrayContaining([
+        { type: 'not-transfer', txn: outgoing.id },
+        { type: 'set', txn: outgoing.id, kind: 'spending', category: 'Rent' },
+        { type: 'not-transfer', txn: incoming.id },
+      ]),
+    );
+    expect(saves.bodies()[0]).toHaveLength(3);
   });
 
   it('moves a dismissed possible transfer out of the Needs you tab', () => {

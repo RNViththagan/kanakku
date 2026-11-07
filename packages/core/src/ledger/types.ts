@@ -30,6 +30,7 @@ export interface Transaction {
   tags: WordingTag[];
   deposit?: string;
   decidedBy?: 'answer' | 'rule' | 'wording' | 'match' | 'default';
+  ruleIndex?: number;
   parts: Part[];
   transfer?: string;
   flag?: 'waiting' | 'possible' | 'ambiguous';

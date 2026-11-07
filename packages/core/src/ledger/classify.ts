@@ -123,10 +123,10 @@ export function classify(
     const answer = answers.get(transaction.id);
     if (answer) return settle(transaction, answer, 'answer');
 
-    for (const rule of ctx.rules) {
+    for (const [ruleIndex, rule] of ctx.rules.entries()) {
       if (!ruleMatches(rule, transaction, patterns)) continue;
       const meaning = ruleMeaning(rule, ctx.categories);
-      if (meaning) return settle(transaction, meaning, 'rule');
+      if (meaning) return { ...settle(transaction, meaning, 'rule'), ruleIndex };
     }
 
     for (const tag of transaction.tags) {

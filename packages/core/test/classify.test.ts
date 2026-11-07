@@ -64,6 +64,15 @@ describe('classify', () => {
     });
   });
 
+  it('records which rule sorted a row', () => {
+    const row = txn('RENT PAID TO OWNER', -50000);
+    const first: UserRule = { match: { text: 'rent' }, category: 'Rent' };
+    const second: UserRule = { match: { text: 'owner' }, category: 'Bills' };
+    expect(run([row], [first, second])[0]).toMatchObject({ category: 'Rent', ruleIndex: 0 });
+    expect(run([row], [second, first])[0]).toMatchObject({ category: 'Bills', ruleIndex: 0 });
+    expect(run([txn('NOTHING HERE', -100)], [first])[0]?.ruleIndex).toBeUndefined();
+  });
+
   it('lets a rule beat wording', () => {
     const rules: UserRule[] = [
       { match: { text: 'atm service' }, kind: 'spending', category: 'Bills' },

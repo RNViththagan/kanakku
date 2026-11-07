@@ -163,10 +163,26 @@ export function searchTransfers(rows: TransferRow[], search: string): TransferRo
   );
 }
 
-export function transfersOnTab(rows: TransferRow[], tab: TransferTab): TransferRow[] {
+export function neededTransfers(ledger: Ledger): Set<string> {
+  return new Set(
+    ledger.needs
+      .filter((need) => need.type === 'possible-transfer' || need.type === 'ambiguous-transfer')
+      .flatMap((need) => need.refs.txns ?? []),
+  );
+}
+
+export function isOpenTransfer(row: TransferRow): boolean {
+  return row.status === 'possible' || row.status === 'ambiguous';
+}
+
+export function transfersOnTab(
+  rows: TransferRow[],
+  tab: TransferTab,
+  needed?: ReadonlySet<string>,
+): TransferRow[] {
   switch (tab) {
     case 'needs':
-      return rows.filter((row) => row.status === 'possible' || row.status === 'ambiguous');
+      return rows.filter((row) => isOpenTransfer(row) && (!needed || needed.has(row.id)));
     case 'waiting':
       return rows.filter((row) => row.status === 'waiting');
     case 'deposits':

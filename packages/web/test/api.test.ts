@@ -11,7 +11,7 @@ beforeEach(() => {
 
 afterEach(() => {
   vi.unstubAllGlobals();
-  document.head.innerHTML = '';
+  document.head.replaceChildren();
 });
 
 function answering(status: number, body: string) {

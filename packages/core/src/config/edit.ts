@@ -41,7 +41,7 @@ export type EditResult = ConfigEditResult | { stale: true };
 
 const BOM = '﻿';
 
-const ENGINE_CATEGORIES = [
+export const ENGINE_CATEGORIES = [
   'Interest',
   'Fees',
   'Tax',

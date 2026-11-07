@@ -130,6 +130,25 @@ export function transfersTaken(ledger: Ledger, rule: UserRule): number {
   ).length;
 }
 
+export function ruleSorts(ledger: Ledger, index: number): number {
+  return ledger.transactions.filter((row) => row.decidedBy === 'rule' && row.ruleIndex === index)
+    .length;
+}
+
+export function matchCount(ledger: Ledger, rule: UserRule): number {
+  return ledger.transactions.filter((row) => matchesRule(rule, row)).length;
+}
+
+export function takenEarlier(ledger: Ledger, rule: UserRule, before?: number): number {
+  return ledger.transactions.filter(
+    (row) =>
+      row.decidedBy === 'rule' &&
+      row.ruleIndex !== undefined &&
+      (before === undefined || row.ruleIndex < before) &&
+      matchesRule(rule, row),
+  ).length;
+}
+
 export function ruleCount(ledger: Ledger, rule: RuleEdit): number {
   const text = rule.match.trim();
   if (text === '') return 0;

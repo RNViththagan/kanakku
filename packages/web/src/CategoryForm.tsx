@@ -12,9 +12,10 @@ import {
   Typography,
 } from '@wso2/oxygen-ui';
 import { useMemo, useState } from 'react';
-import { ruleCount, ruleText, transfersTaken } from './answers';
+import { ruleCount, ruleText, takenEarlier, transfersTaken } from './answers';
 import { saveAnswers, saveRule } from './api';
 import { CategorySelect, kindOfCategory } from './CategorySelect';
+import { RuleCounts } from './RuleForm';
 import { SaveNote, useSave } from './Saving';
 
 const RULE_LABEL = 'Also for every transaction whose text contains';
@@ -61,6 +62,7 @@ export function CategoryForm({
       ? ruleCount(ledger, { match, ...(direction && { direction }) })
       : 0;
   const taken = withRule && match.length >= 3 ? transfersTaken(ledger, rule) : 0;
+  const earlier = withRule && match.length >= 3 ? takenEarlier(ledger, rule) : 0;
   const ruleReady = !withRule || (match.length >= 3 && matches > 0 && taken === 0);
   const ready = kind !== undefined && ruleReady && !save.saving && !save.done;
 
@@ -125,16 +127,7 @@ export function CategoryForm({
                     onChange={(event) => setText(event.target.value)}
                     slotProps={{ htmlInput: { 'aria-label': 'Text to match' } }}
                   />
-                  <Typography variant="body2" color="text.secondary">
-                    {matches === 0
-                      ? 'Matches no transactions'
-                      : `Matches ${plural(matches, 'transaction', 'transactions')}`}
-                  </Typography>
-                  {taken > 0 ? (
-                    <Typography variant="body2" color="error.main">
-                      {`This would also take ${plural(taken, 'transfer', 'transfers')} between your accounts, which would then count as income or spending. Make the text more specific.`}
-                    </Typography>
-                  ) : null}
+                  <RuleCounts matches={matches} earlier={earlier} taken={taken} />
                 </Stack>
               ) : null}
             </>

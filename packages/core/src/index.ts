@@ -12,6 +12,7 @@ export type {
 export {
   addCategory,
   addRule,
+  ENGINE_CATEGORIES,
   moveRule,
   removeCategory,
   removeRule,

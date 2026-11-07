@@ -18,6 +18,7 @@ import type { ReactNode } from 'react';
 import { usePattern } from '../appearance';
 import { useConfig } from '../config';
 import { SettingsAccounts } from '../SettingsAccounts';
+import { SettingsRules } from '../SettingsRules';
 import { Section, Title, useDark } from '../ui';
 import type { PageProps } from './types';
 
@@ -158,7 +159,7 @@ function Appearance() {
 }
 
 export function Settings({ ledger }: PageProps) {
-  const { config, errors, loaded, problem } = useConfig(ledger);
+  const { config, errors, loaded, problem, reload } = useConfig(ledger);
   return (
     <>
       <Title
@@ -173,6 +174,7 @@ export function Settings({ ledger }: PageProps) {
         loaded={loaded}
         problem={problem}
       />
+      {config ? <SettingsRules ledger={ledger} config={config} reload={reload} /> : null}
     </>
   );
 }

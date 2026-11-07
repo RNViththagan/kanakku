@@ -69,6 +69,10 @@ function ruleMatches(
   return pattern.test(transaction.description);
 }
 
+export function matchesRule(rule: UserRule, transaction: Transaction): boolean {
+  return ruleMatches(rule, transaction, new Map());
+}
+
 function ruleMeaning(rule: UserRule, categories: Categories): Settled | undefined {
   const kind =
     rule.kind ??

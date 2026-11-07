@@ -1,4 +1,12 @@
-import type { ConfigError, Ledger, TidyProposal } from '@kanakku/core';
+import type {
+  AccountEdit,
+  ConfigError,
+  Decision,
+  DecisionContent,
+  Ledger,
+  RuleEdit,
+  TidyProposal,
+} from '@kanakku/core';
 import { useEffect, useState } from 'react';
 
 export interface Status {
@@ -43,8 +51,11 @@ function markLoaded(): void {
   }
 }
 
-async function request(path: string): Promise<Response> {
-  const response = await fetch(path, { headers: { 'x-kanakku-token': readToken() } });
+async function request(path: string, init: RequestInit = {}): Promise<Response> {
+  const response = await fetch(path, {
+    ...init,
+    headers: { 'x-kanakku-token': readToken(), ...(init.headers as Record<string, string>) },
+  });
   if (response.status === 401) {
     reloadOnce();
     throw new Error('Kanakku was restarted. Reload this page.');
@@ -56,6 +67,45 @@ async function readJson<T>(path: string): Promise<T> {
   const response = await request(path);
   if (!response.ok) throw new Error(`Kanakku answered ${response.status} for ${path}`);
   return (await response.json()) as T;
+}
+
+async function write(path: string, method: string, value?: unknown): Promise<Response> {
+  const response = await request(
+    path,
+    value === undefined
+      ? { method }
+      : { method, headers: { 'content-type': 'application/json' }, body: JSON.stringify(value) },
+  );
+  if (response.ok) return response;
+  const reason = await response.json().then(
+    (body: { errors?: unknown }) =>
+      Array.isArray(body.errors) && body.errors.length > 0 ? body.errors.join('. ') : undefined,
+    () => undefined,
+  );
+  throw new Error(reason ?? `Kanakku answered ${response.status}`);
+}
+
+export async function saveAnswers(
+  contents: DecisionContent[],
+): Promise<{ decisions: Decision[]; replaced: Decision[] }> {
+  const response = await write('/api/decisions', 'POST', contents);
+  return (await response.json()) as { decisions: Decision[]; replaced: Decision[] };
+}
+
+export async function removeAnswer(id: string): Promise<void> {
+  await write(`/api/decisions/${encodeURIComponent(id)}`, 'DELETE');
+}
+
+export function fetchAnswers(): Promise<{ decisions: Decision[]; unused: string[] }> {
+  return readJson<{ decisions: Decision[]; unused: string[] }>('/api/decisions');
+}
+
+export async function saveAccount(edit: AccountEdit): Promise<void> {
+  await write('/api/config/accounts', 'POST', edit);
+}
+
+export async function saveRule(rule: RuleEdit): Promise<void> {
+  await write('/api/config/rules', 'POST', rule);
 }
 
 export function fetchStatus(): Promise<Status> {

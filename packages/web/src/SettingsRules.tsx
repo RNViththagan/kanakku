@@ -109,8 +109,11 @@ export function SettingsRules({
       <Stack spacing={1.5} sx={{ mt: 1 }}>
         {config.rules.map((rule, index) => {
           const number = index + 1;
+          const seen = config.rules
+            .slice(0, index)
+            .filter((other) => sentence(other) === sentence(rule));
           return (
-            <Box key={`${index}-${sentence(rule)}`}>
+            <Box key={`${sentence(rule)}#${seen.length}`}>
               <Stack
                 direction={{ xs: 'column', sm: 'row' }}
                 sx={{ justifyContent: 'space-between', gap: 1 }}

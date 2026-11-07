@@ -28,10 +28,6 @@ export function canCategorise(row: Pick<Transaction, 'kind' | 'parts'>): boolean
   return row.kind !== 'transfer' || partToSort(row) !== undefined;
 }
 
-function plural(count: number, one: string, many: string): string {
-  return count === 1 ? `1 ${one}` : `${count} ${many}`;
-}
-
 export function CategoryForm({
   ledger,
   txns,

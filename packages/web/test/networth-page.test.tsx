@@ -84,7 +84,19 @@ describe('NetWorth deposits', () => {
     expect(link(active, '…9999')?.getAttribute('href')).toBe(
       '#/account/deposit-combank-3099999999',
     );
-    expect(link(active, 'Set the term')?.getAttribute('href')).toBe('#/needs');
+    expect(
+      [...active.querySelectorAll('button')].some((item) => item.textContent === 'Set the term'),
+    ).toBe(true);
+  });
+
+  it('opens the term form from Term not set', async () => {
+    const page = show({ ...world, coverage: {} });
+    const open = [...section(page, 'Active fixed deposits').querySelectorAll('button')].find(
+      (item) => item.textContent === 'Term not set',
+    );
+    if (!open) throw new Error('no Term not set button');
+    await act(async () => open.click());
+    expect(document.body.querySelector('input[aria-label="Months"]')).not.toBeNull();
   });
 
   it('says a deposit may already have matured once that date has passed', () => {

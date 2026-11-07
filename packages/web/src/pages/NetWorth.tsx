@@ -1,5 +1,6 @@
 import type { Account } from '@kanakku/core';
 import {
+  Button,
   Link,
   Table,
   TableBody,
@@ -8,7 +9,8 @@ import {
   TableRow,
   Typography,
 } from '@wso2/oxygen-ui';
-import { Fragment, useMemo } from 'react';
+import { Fragment, useMemo, useState } from 'react';
+import { DepositForm } from '../DepositForm';
 import { money, monthLabel, shortDate, toMajor } from '../format';
 import { hrefFor } from '../routes';
 import { netWorthPoints } from '../series';
@@ -60,6 +62,12 @@ export function NetWorth({ ledger, range, rangeLabel }: PageProps) {
     .sort((a, b) => (b.closed ?? '').localeCompare(a.closed ?? ''));
   const names = new Map(ledger.accounts.map((account) => [account.id, account.name]));
   const colors = useMoneyColors();
+  const [editing, setEditing] = useState<DepositRow>();
+  const termButton = (row: DepositRow, label: string) => (
+    <Button size="small" sx={{ p: 0, minWidth: 0 }} onClick={() => setEditing(row)}>
+      {label}
+    </Button>
+  );
 
   return (
     <>
@@ -171,18 +179,23 @@ export function NetWorth({ ledger, range, rangeLabel }: PageProps) {
                       <TableCell>{row.start ? shortDate(row.start, locale) : ''}</TableCell>
                       <TableCell>
                         {row.maturity ? (
-                          shortDate(row.maturity, locale)
+                          <>
+                            {shortDate(row.maturity, locale)}
+                            <Typography variant="caption" component="div">
+                              {termButton(row, 'Edit')}
+                            </Typography>
+                          </>
                         ) : row.earliest ? (
                           <>
                             {row.earliest <= ledger.today
                               ? `May have matured on ${shortDate(row.earliest, locale)}`
                               : `${shortDate(row.earliest, locale)} at the earliest`}
                             <Typography variant="caption" component="div">
-                              <Link href={hrefFor({ page: 'needs' })}>Set the term</Link>
+                              {termButton(row, 'Set the term')}
                             </Typography>
                           </>
                         ) : (
-                          <Link href={hrefFor({ page: 'needs' })}>Term not set</Link>
+                          termButton(row, 'Term not set')
                         )}
                       </TableCell>
                       <TableCell align="right">
@@ -270,6 +283,9 @@ export function NetWorth({ ledger, range, rangeLabel }: PageProps) {
           ) : null}
         </>
       )}
+      {editing ? (
+        <DepositForm ledger={ledger} row={editing} onClose={() => setEditing(undefined)} />
+      ) : null}
     </>
   );
 }

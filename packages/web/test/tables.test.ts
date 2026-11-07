@@ -287,6 +287,7 @@ describe('depositRows', () => {
         start: '2026-02-01',
         earliest: '2026-03-01',
         interest: 0,
+        placed: true,
       },
     ]);
   });

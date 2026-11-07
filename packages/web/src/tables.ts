@@ -412,6 +412,7 @@ export interface DepositRow {
   earliest?: IsoDate;
   replaced?: Account[];
   replacedBy?: Account[];
+  placed: boolean;
 }
 
 const STANDARD_TERMS = [1, 3, 6, 12, 24, 36, 48, 60];
@@ -481,6 +482,9 @@ export function depositRows(ledger: Ledger): DepositRow[] {
         status: withdrawn ? 'withdrawn' : 'active',
         balance,
         interest: interest.get(account.id) ?? 0,
+        placed: ledger.transfers.some(
+          (transfer) => transfer.rule === 'deposit' && transfer.to === account.id,
+        ),
       };
       const principal = account.deposit?.principal ?? life.principal;
       if (principal !== undefined) row.principal = principal;

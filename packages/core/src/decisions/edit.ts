@@ -11,19 +11,25 @@ function names(decision: Decision, txn: string): boolean {
   return decision.type === 'pair' && (decision.out === txn || decision.in === txn);
 }
 
+function settles(decision: Decision, txn: string): boolean {
+  return (decision.type === 'transfer' || decision.type === 'not-transfer') && decision.txn === txn;
+}
+
+function setsKind(decision: Decision, txn: string): boolean {
+  return decision.type === 'set' && decision.txn === txn && decision.kind !== undefined;
+}
+
 function contradicts(content: DecisionContent, earlier: Decision): boolean {
   switch (content.type) {
     case 'pair':
       return [content.out, content.in].some(
-        (txn) =>
-          names(earlier, txn) ||
-          ((earlier.type === 'transfer' || earlier.type === 'not-transfer') && earlier.txn === txn),
+        (txn) => names(earlier, txn) || settles(earlier, txn) || setsKind(earlier, txn),
       );
     case 'transfer':
       return (
         names(earlier, content.txn) ||
-        ((earlier.type === 'transfer' || earlier.type === 'not-transfer') &&
-          earlier.txn === content.txn)
+        settles(earlier, content.txn) ||
+        setsKind(earlier, content.txn)
       );
     case 'not-transfer': {
       const partner = content.with;

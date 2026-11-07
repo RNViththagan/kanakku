@@ -80,6 +80,21 @@ describe('addDecisions', () => {
     expect(contentsOf(added(start, [transfer]).text)).toEqual([pair('t3', 't4'), transfer]);
   });
 
+  it('a pair or a transfer answer replaces a category answer with a kind for its rows', () => {
+    const groceries: DecisionContent = {
+      type: 'set',
+      txn: 't1',
+      kind: 'spending',
+      category: 'Groceries',
+    };
+    const fee: DecisionContent = { type: 'set', txn: 't2', category: 'Bills' };
+    const paired = added(file(groceries, fee), [pair('t1', 't2')]);
+    expect(contentsOf(paired.text)).toEqual([fee, pair('t1', 't2')]);
+    expect(paired.replaced.map((decision) => decision.type)).toEqual(['set']);
+    const moved: DecisionContent = { type: 'transfer', txn: 't1', account: 'hnb-lkr' };
+    expect(contentsOf(added(file(groceries), [moved]).text)).toEqual([moved]);
+  });
+
   it('a not-transfer with a partner removes only that pair', () => {
     const start = file(pair('t1', 't2'), pair('t3', 't4'));
     expect(contentsOf(added(start, [notTransfer('t2', 't1')]).text)).toEqual([
